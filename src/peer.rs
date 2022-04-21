@@ -34,6 +34,7 @@ impl TaggedState {
 
 pub struct Peer<S: AsyncRead + AsyncWrite> {
     pub id: PeerId,
+    pub username: RwLock<Option<String>>,
     pub state: RwLock<Arc<TaggedState>>,
     /// The peers which didn't receive the current state yet.
     pub state_dirty: RwLock<HashMap<PeerId, Arc<Peer<S>>>>,
@@ -45,7 +46,11 @@ pub struct Peer<S: AsyncRead + AsyncWrite> {
 
 impl<S: AsyncRead + AsyncWrite> Display for Peer<S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        self.addr.fmt(f)
+        if let Some(username) = block_in_place(|| self.username.blocking_read().clone()) {
+            f.write_fmt(format_args!("{}(#{} `{}`)", self.addr, self.id, username))
+        } else {
+            f.write_fmt(format_args!("{}(#{})", self.addr, self.id))
+        }
     }
 }
 
@@ -63,6 +68,7 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
     ) -> io::Result<Arc<Self>> {
         let peer = Arc::new(Self {
             id,
+            username: RwLock::new(None),
             state: RwLock::new(Arc::new(TaggedState::new())),
             state_dirty: RwLock::new(HashMap::new()),
             addr: peer_address,

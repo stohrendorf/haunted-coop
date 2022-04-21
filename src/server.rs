@@ -1,4 +1,5 @@
 use crate::{Peer, PeerId};
+use std::sync::atomic::AtomicU64;
 use std::{
     collections::HashMap,
     error::Error,
@@ -9,7 +10,7 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync::RwLock,
 };
-use tracing::info;
+use tracing::{info, warn};
 
 pub struct Session<S: AsyncRead + AsyncWrite> {
     id: String,
@@ -28,12 +29,13 @@ impl<S: AsyncRead + AsyncWrite> Session<S> {
 
 impl<S: AsyncRead + AsyncWrite> Display for Session<S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.id)
+        f.write_fmt(format_args!("`{}`", self.id))
     }
 }
 
 pub struct ServerState<S: AsyncRead + AsyncWrite> {
     pub sessions: RwLock<HashMap<String, Arc<Session<S>>>>,
+    pub peer_id_counter: AtomicU64,
 }
 
 #[derive(Debug)]
@@ -59,25 +61,21 @@ impl<S: AsyncRead + AsyncWrite> ServerState<S> {
     pub fn new() -> Self {
         Self {
             sessions: RwLock::new(HashMap::new()),
+            peer_id_counter: AtomicU64::new(0),
         }
     }
 
     /// Removes a peer from its session and purges the session if it becomes empty.
-    pub async fn drop_peer(&self, peer: &Arc<Peer<S>>) -> Result<(), ServerError> {
+    pub async fn drop_peer(&self, peer: &Arc<Peer<S>>) {
         if let Some(session) = peer.session.read().await.upgrade() {
             let mut peers = session.peers.write().await;
             peers.remove(&peer.id);
             if peers.is_empty() {
-                info!("purging empty session `{}`", session);
+                info!("purging empty session {}", session);
                 self.sessions.write().await.remove(session.id.as_str());
             }
         } else {
-            return Err(ServerError::new(format!(
-                "{} has no associated session",
-                *peer
-            )));
+            warn!("{} has no associated session", *peer);
         }
-
-        Ok(())
     }
 }

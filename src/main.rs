@@ -9,7 +9,7 @@ use crate::{
     server::{ServerError, ServerState, Session},
 };
 use clap::Parser;
-use futures::{SinkExt, StreamExt};
+use futures::{future, SinkExt, StreamExt};
 use std::{
     collections::hash_map::DefaultHasher,
     error::Error,
@@ -20,6 +20,7 @@ use std::{
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
+use tokio::net::TcpStream;
 use tokio::{
     io::{AsyncRead, AsyncWrite, BufReader, BufWriter},
     net::TcpListener,
@@ -40,8 +41,13 @@ mod server;
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// Listen address
-    #[clap(short, long, default_value = "127.0.0.1:1996")]
-    listen: String,
+    #[clap(
+        short,
+        long,
+        default_values = &["127.0.0.1:1996", "[::1]:1996"],
+        multiple_occurrences(true)
+    )]
+    listen: Vec<String>,
 
     /// Socket timeout
     #[clap(short, long, default_value = "5")]
@@ -55,12 +61,44 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
     let server_state = Arc::new(ServerState::new());
-    let addr: SocketAddr = args.listen.parse()?;
-    let listener = TcpListener::bind(&addr).await?;
+    let addrs: Vec<SocketAddr> = args
+        .listen
+        .iter()
+        .map(|arg| {
+            arg.parse()
+                .unwrap_or_else(|_| panic!("invalid socket address {}", arg))
+        })
+        .collect();
 
-    info!("Listening on {}", addr);
+    let mut handles = Vec::new();
 
-    let mut peer_id: PeerId = 0;
+    for addr in addrs {
+        let server_state = server_state.clone();
+        let handle = tokio::spawn(async move {
+            run_server(
+                Duration::from_secs(args.timeout_seconds),
+                server_state,
+                addr,
+            )
+            .await
+            .expect("failed to run server");
+        });
+        handles.push(handle);
+    }
+
+    future::try_join_all(handles).await?;
+
+    Ok(())
+}
+
+async fn run_server(
+    socket_timeout: Duration,
+    server_state: Arc<ServerState<BufWriter<TimeoutWriter<BufReader<TimeoutReader<TcpStream>>>>>>,
+    addr: SocketAddr,
+) -> Result<(), Box<dyn Error>> {
+    let listener = TcpListener::bind(addr).await?;
+
+    info!("Listening on {:?}", addr);
 
     loop {
         let (stream, addr) = listener.accept().await?;
@@ -69,7 +107,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         let server_state = server_state.clone();
         stream.set_nodelay(true)?;
 
-        peer_id += 1;
+        let peer_id = server_state.peer_id_counter.fetch_add(1, Ordering::AcqRel);
         let peer = match Peer::new(peer_id, addr, &server_state).await {
             Ok(peer) => peer,
             Err(e) => {
@@ -78,12 +116,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        let mut processor = Connection::new(
-            peer.clone(),
-            create_timeout_stream(Duration::from_secs(args.timeout_seconds), stream),
-        );
+        let mut processor =
+            Connection::new(peer.clone(), create_timeout_stream(socket_timeout, stream));
 
         tokio::spawn(async move { processor.process().await });
+        yield_now().await;
     }
 }
 
@@ -193,31 +230,29 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                         }
                     },
                     Some(Err(e)) => {
-                        error!("{} error = {:?}", self.peer.addr, e);
+                        error!("{} {:?}", self.peer, e);
                         break;
                     }
                     None => continue,
                 },
                 _ = delivery_ticker.tick() => {
                     if let Err(e) = self.do_deliveries().await {
-                        error!("{} state delivery failed: {:?}", self.peer.addr, e);
+                        error!("{} state delivery failed: {:?}", self.peer, e);
                         break;
                     }
                 },
             };
 
             if let Err(e) = self.messages.flush().await {
-                error!("{} flush failed: {:?}", self.peer.addr, e);
+                error!("{} flush failed: {:?}", self.peer, e);
                 break;
             }
             yield_now().await;
         }
 
-        if let Err(e) = self.peer.server_state.drop_peer(&self.peer).await {
-            error!("{} failed to drop peer: {:?}", self.peer.addr, e);
-        }
+        self.peer.server_state.drop_peer(&self.peer).await;
 
-        info!("DISCONNECT {}", self.peer.addr);
+        info!("DISCONNECT {}", self.peer);
     }
 
     async fn handle_message(&mut self, msg: ClientMessage) -> Result<(), MessageCodecError> {
@@ -245,8 +280,8 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             }
             ClientMessage::Failure { message } => {
                 return Err(MessageCodecError::new(format!(
-                    "Peer {} sent unexpected failure: `{}`",
-                    self.peer.addr, message
+                    "{} sent unexpected failure: `{}`",
+                    self.peer, message
                 )))
             }
         }
@@ -326,9 +361,11 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         username: String,
         session: &Arc<Session<S>>,
     ) -> Result<(), MessageCodecError> {
+        *self.peer.username.write().await = Some(username);
+
         // TODO check auth token
         if true {
-            info!("LOGIN {} to session {}", username, *session);
+            info!("LOGIN {}", self.peer);
             match join_peer_to_session(self.peer.clone(), session).await {
                 Ok(_) => {}
                 Err(e) => return Err(MessageCodecError::new(e.message)),
@@ -341,7 +378,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             self.messages.send(ServerMessage::ServerInfo {}).await?;
             Ok(())
         } else {
-            warn!("auth failed");
+            warn!("{} auth failed", self.peer);
             self.messages
                 .send(ServerMessage::Failure {
                     message: "authentication failed".into(),
