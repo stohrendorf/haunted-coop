@@ -299,9 +299,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                 return Err(MessageCodecError::new(e.message));
             }
         };
-        if peers.is_empty() {
-            return Ok(());
-        }
+
         self.peer.state_dirty.write().await.clear();
 
         let mut states: Vec<(PeerId, Arc<TaggedState>)> = Vec::new();
