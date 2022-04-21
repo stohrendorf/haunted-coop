@@ -76,7 +76,7 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
     /// Get all peers in the same session of this peer with the same state tag that haven't received
     /// this peer's state yet.
     ///
-    /// If [`all_session_peers`] is `true`, this will return all peers in the same session with the
+    /// If `all_session_peers` is `true`, this will return all peers in the same session with the
     /// same state tag, excluding this peer.
     pub async fn get_out_of_date_peers(
         &self,
