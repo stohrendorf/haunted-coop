@@ -116,10 +116,9 @@ async fn run_server(
             }
         };
 
-        let mut processor =
-            Connection::new(peer.clone(), create_timeout_stream(socket_timeout, stream));
+        let mut connection = Connection::new(peer, create_timeout_stream(socket_timeout, stream));
 
-        tokio::spawn(async move { processor.process().await });
+        tokio::spawn(async move { connection.process().await });
         yield_now().await;
     }
 }
