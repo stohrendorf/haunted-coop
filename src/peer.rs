@@ -1,6 +1,8 @@
-use crate::codec::PeerId;
-use crate::server::{ServerError, Session};
-use crate::ServerState;
+use crate::{
+    codec::PeerId,
+    server::{ServerError, Session},
+    ServerState,
+};
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},

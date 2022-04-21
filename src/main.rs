@@ -1,13 +1,12 @@
 #![warn(clippy::pedantic)]
 extern crate core;
 
-use crate::codec::MAX_STATE_SIZE_BYTES;
-use crate::server::ServerError;
 use crate::{
-    codec::{ClientMessage, MessageCodec, MessageCodecError, PeerId, ServerMessage},
+    codec::{
+        ClientMessage, MessageCodec, MessageCodecError, PeerId, ServerMessage, MAX_STATE_SIZE_BYTES,
+    },
     peer::{Peer, TaggedState},
-    server::ServerState,
-    server::Session,
+    server::{ServerError, ServerState, Session},
 };
 use clap::Parser;
 use futures::{SinkExt, StreamExt};

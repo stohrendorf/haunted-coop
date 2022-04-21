@@ -1,13 +1,15 @@
-use crate::io_util::{ReadPascalExt, WritePascalExt};
-use crate::peer::TaggedState;
+use crate::{
+    io_util::{ReadPascalExt, WritePascalExt},
+    peer::TaggedState,
+};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use bytes::{buf::Reader, Buf, BufMut, BytesMut};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::sync::Arc;
 use std::{
     error::Error,
     fmt::{Debug, Display, Formatter},
     io::ErrorKind,
+    sync::Arc,
 };
 use tokio_util::codec::{Decoder, Encoder};
 
