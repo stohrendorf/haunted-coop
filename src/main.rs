@@ -25,7 +25,6 @@ use tokio::{
     net::{TcpListener, TcpStream},
     runtime::Builder,
     select,
-    task::yield_now,
     time::interval,
 };
 use tokio_io_timeout::{TimeoutReader, TimeoutWriter};
@@ -137,7 +136,6 @@ async fn run_server(
         let mut connection = Connection::new(peer, create_timeout_stream(socket_timeout, stream));
 
         tokio::spawn(async move { connection.process().await });
-        yield_now().await;
     }
 }
 
@@ -258,7 +256,6 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                 error!("{} flush failed: {:?}", self.peer, e);
                 break;
             }
-            yield_now().await;
         }
 
         self.peer.server_state.drop_peer(&self.peer);
