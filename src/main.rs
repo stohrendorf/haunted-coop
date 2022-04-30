@@ -5,7 +5,7 @@ use crate::{
     codec::{
         ClientMessage, MessageCodec, MessageCodecError, PeerId, ServerMessage, MAX_STATE_SIZE_BYTES,
     },
-    peer::{Peer, TaggedState},
+    peer::Peer,
     server::{ServerError, ServerState, Session},
 };
 use clap::Parser;
@@ -140,12 +140,12 @@ struct Connection<S: AsyncRead + AsyncWrite> {
     messages: Pin<Box<Framed<S, MessageCodec>>>,
 }
 
-/// Sets the peer's tagged state and notifies other peers in the same session for state broadcasting.
+/// Sets the peer's state and notifies other peers in the same session for state broadcasting.
 async fn set_peer_state<S: AsyncRead + AsyncWrite>(
     peer: &Arc<Peer<S>>,
-    state: Arc<TaggedState>,
+    state: Arc<Vec<u8>>,
 ) -> Result<bool, ServerError> {
-    if state.data.len() > MAX_STATE_SIZE_BYTES as usize {
+    if state.len() > MAX_STATE_SIZE_BYTES as usize {
         return Ok(false);
     }
 
@@ -159,10 +159,9 @@ async fn set_peer_state<S: AsyncRead + AsyncWrite>(
 
     *peer.state.write().await = state;
 
-    let peer_tag = peer.state.read().await.tag.clone();
     for session_peer in session.peers.read().await.values() {
-        if session_peer.id == peer.id || session_peer.state.read().await.tag != peer_tag {
-            // don't mark the peer dirty for itself or if the peer doesn't have a matching state tag
+        if session_peer.id == peer.id {
+            // don't mark the peer dirty for itself
             continue;
         }
 
@@ -208,10 +207,9 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             return Ok(());
         }
 
-        let tag = self.peer.state.read().await.tag.clone();
         let full_delivery = self.peer.full_delivery.load(Ordering::Acquire);
         self.peer.full_delivery.store(false, Ordering::Release);
-        self.send_states(&tag, full_delivery).await?;
+        self.send_states(full_delivery).await?;
         Ok(())
     }
 
@@ -270,9 +268,8 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                 };
                 self.handle_login(username, &session).await?;
             }
-            ClientMessage::UpdateState { tag, data } => {
-                self.handle_update_state(Arc::new(TaggedState { data, tag }))
-                    .await?;
+            ClientMessage::UpdateState { data } => {
+                self.handle_update_state(Arc::new(data)).await?;
             }
             ClientMessage::StateQuery {} => {
                 self.peer.full_delivery.store(true, Ordering::Release);
@@ -288,11 +285,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         Ok(())
     }
 
-    async fn send_states(
-        &mut self,
-        tag: &String,
-        full_delivery: bool,
-    ) -> Result<(), MessageCodecError> {
+    async fn send_states(&mut self, full_delivery: bool) -> Result<(), MessageCodecError> {
         let peers = match self.peer.get_out_of_date_peers(full_delivery).await {
             Ok(peers) => peers,
             Err(e) => {
@@ -302,20 +295,16 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
 
         self.peer.state_dirty.write().await.clear();
 
-        let mut states: Vec<(PeerId, Arc<TaggedState>)> = Vec::new();
+        let mut states: Vec<(PeerId, Arc<Vec<u8>>)> = Vec::new();
         states.reserve(peers.len());
 
         for (peer_id, peer) in peers {
             assert_ne!(peer_id, self.peer.id);
 
-            let state = match peer.state_if_tagged(tag).await {
-                Some(state) => state,
-                None => continue,
-            };
             let mut hasher = DefaultHasher::new();
             peer.addr.hash(&mut hasher);
             peer.id.hash(&mut hasher);
-            states.push((hasher.finish(), state));
+            states.push((hasher.finish(), peer.state.read().await.clone()));
         }
 
         self.messages
@@ -328,10 +317,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         Ok(())
     }
 
-    async fn handle_update_state(
-        &mut self,
-        state: Arc<TaggedState>,
-    ) -> Result<(), MessageCodecError> {
+    async fn handle_update_state(&mut self, state: Arc<Vec<u8>>) -> Result<(), MessageCodecError> {
         match set_peer_state(&self.peer, state).await {
             Ok(true) => Ok(()),
             Ok(false) => {

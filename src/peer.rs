@@ -16,26 +16,10 @@ use tokio::{
     task::block_in_place,
 };
 
-#[derive(Debug, Clone)]
-pub struct TaggedState {
-    /// The current state payload of the peer.
-    pub data: Vec<u8>,
-    pub tag: String,
-}
-
-impl TaggedState {
-    pub fn new() -> Self {
-        Self {
-            data: Vec::new(),
-            tag: String::new(),
-        }
-    }
-}
-
 pub struct Peer<S: AsyncRead + AsyncWrite> {
     pub id: PeerId,
     pub username: RwLock<Option<String>>,
-    pub state: RwLock<Arc<TaggedState>>,
+    pub state: RwLock<Arc<Vec<u8>>>,
     /// The peers which didn't receive the current state yet.
     pub state_dirty: RwLock<HashMap<PeerId, Arc<Peer<S>>>>,
     pub addr: SocketAddr,
@@ -69,7 +53,7 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
         let peer = Arc::new(Self {
             id,
             username: RwLock::new(None),
-            state: RwLock::new(Arc::new(TaggedState::new())),
+            state: RwLock::new(Arc::new(Vec::new())),
             state_dirty: RwLock::new(HashMap::new()),
             addr: peer_address,
             server_state: server_state.clone(),
@@ -79,11 +63,10 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
         Ok(peer)
     }
 
-    /// Get all peers in the same session of this peer with the same state tag that haven't received
-    /// this peer's state yet.
+    /// Get all peers in the same session of this peer that haven't received this peer's state yet.
     ///
-    /// If `all_session_peers` is `true`, this will return all peers in the same session with the
-    /// same state tag, excluding this peer.
+    /// If `all_session_peers` is `true`, this will return all peers in the same session, excluding
+    /// this peer.
     pub async fn get_out_of_date_peers(
         &self,
         all_session_peers: bool,
@@ -100,21 +83,9 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
         if all_session_peers {
             let mut peers = session.peers.read().await.clone();
             peers.remove(&self.id);
-            let self_tag = self.state.read().await.tag.clone();
-            block_in_place(|| peers.retain(|_, peer| peer.state.blocking_read().tag == self_tag));
             Ok(peers)
         } else {
             Ok(self.state_dirty.read().await.clone())
-        }
-    }
-
-    /// Returns [`None`] if this peer's state tag doesn't match `tag`, otherwise the state.
-    pub async fn state_if_tagged(&self, tag: &String) -> Option<Arc<TaggedState>> {
-        let state = self.state.read().await.clone();
-        if state.tag == *tag {
-            Some(state)
-        } else {
-            None
         }
     }
 }

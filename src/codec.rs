@@ -1,7 +1,4 @@
-use crate::{
-    io_util::{ReadPascalExt, WritePascalExt},
-    peer::TaggedState,
-};
+use crate::io_util::{ReadPascalExt, WritePascalExt};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use bytes::{buf::Reader, Buf, BufMut, BytesMut};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -50,16 +47,15 @@ pub enum ClientMessageTypeId {
     /// May emit a [`ServerMessageTypeId::Failure`].
     ///
     /// # Body
-    /// - `tag: PString` - a client-defined tag to filter states in a [`ClientMessageTypeId::StateQuery`]
     /// - `data: PBuffer` - the state to be broadcast
     UpdateState = 1,
 
     /// # Description
-    /// Request to deliver all known states in the session matching the given tag. The response is
-    /// a [`ServerMessageTypeId::FullSync`].
+    /// Request to deliver all known states in the session. The response is a
+    /// [`ServerMessageTypeId::FullSync`].
     ///
     /// # Body
-    /// - `tag: PString`
+    /// Empty
     StateQuery = 2,
 
     /// # Description
@@ -108,7 +104,7 @@ pub enum ServerMessageTypeId {
     UpdateState = 2,
 
     /// # Description
-    /// Contains all known states in the peer's session with a matching tag.
+    /// Contains all known states in the peer's session.
     ///
     /// # Body
     /// - `state_count: u16`
@@ -131,12 +127,12 @@ pub enum ServerMessage {
     /// State broadcast, see [`ServerMessageTypeId::UpdateState`].
     UpdateState {
         /// The peer states to be delivered.
-        states: Vec<(PeerId, Arc<TaggedState>)>,
+        states: Vec<(PeerId, Arc<Vec<u8>>)>,
     },
     /// Complete state delivery, see [`ServerMessageTypeId::FullSync`].
     FullSync {
         /// The peer states to be delivered.
-        states: Vec<(PeerId, Arc<TaggedState>)>,
+        states: Vec<(PeerId, Arc<Vec<u8>>)>,
     },
 }
 
@@ -150,7 +146,7 @@ pub enum ClientMessage {
         session_id: String,
     },
     /// State update message from a client, see [`ClientMessageTypeId::UpdateState`].
-    UpdateState { tag: String, data: Vec<u8> },
+    UpdateState { data: Vec<u8> },
     /// Request to do a full sync, see [`ClientMessageTypeId::StateQuery`] and
     /// [`ServerMessageTypeId::FullSync`].
     StateQuery {},
@@ -179,7 +175,7 @@ impl Display for MessageCodecError {
     }
 }
 
-impl std::convert::From<std::io::Error> for MessageCodecError {
+impl From<std::io::Error> for MessageCodecError {
     fn from(e: std::io::Error) -> Self {
         Self {
             message: e.to_string(),
@@ -217,15 +213,11 @@ fn try_read_login(src: &mut Reader<BytesMut>) -> Option<ClientMessage> {
 /// Tries to read a [`ClientMessageTypeId::UpdateState`] from the client. Returns [`None`] if the
 /// data is incomplete.
 fn try_read_update_state(src: &mut Reader<BytesMut>) -> Option<ClientMessage> {
-    let tag = match src.read_pstring() {
-        Ok(x) => x,
-        Err(_) => return None,
-    };
     let data = match src.read_pbuffer(MAX_STATE_SIZE_BYTES) {
         Ok(x) => x,
         Err(_) => return None,
     };
-    Some(ClientMessage::UpdateState { tag, data })
+    Some(ClientMessage::UpdateState { data })
 }
 
 /// Tries to read a [`ClientMessageTypeId::Failure`].
@@ -315,19 +307,19 @@ impl Encoder<ServerMessage> for MessageCodec {
                 }
 
                 for (peer_id, state) in states {
-                    buf.reserve(1 + state.data.len());
+                    buf.reserve(1 + state.len());
                     let mut w = buf.writer();
                     w.write_u64::<LittleEndian>(peer_id)?;
-                    w.write_pbuffer(&state.data)?;
+                    w.write_pbuffer(&state)?;
                 }
             }
             ServerMessage::UpdateState { states } => {
                 for (peer_id, state) in states {
-                    buf.reserve(1 + state.data.len());
+                    buf.reserve(1 + state.len());
                     let mut w = buf.writer();
                     w.write_u8(ServerMessageTypeId::UpdateState.into())?;
                     w.write_u64::<LittleEndian>(peer_id)?;
-                    w.write_pbuffer(&state.data)?;
+                    w.write_pbuffer(&state)?;
                 }
             }
             ServerMessage::ServerInfo {} => {
