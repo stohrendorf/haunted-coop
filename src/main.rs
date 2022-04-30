@@ -90,6 +90,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let runtime = Builder::new_multi_thread()
         .worker_threads(args.worker_threads)
+        .enable_io()
         .build()?;
 
     let mut handles = Vec::new();
