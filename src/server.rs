@@ -1,15 +1,12 @@
 use crate::{Peer, PeerId};
-use std::sync::atomic::AtomicU64;
+use parking_lot::RwLock;
 use std::{
     collections::HashMap,
     error::Error,
     fmt::{Debug, Display, Formatter},
-    sync::Arc,
+    sync::{atomic::AtomicU64, Arc},
 };
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    sync::RwLock,
-};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tracing::{info, warn};
 
 pub struct Session<S: AsyncRead + AsyncWrite> {
@@ -67,12 +64,12 @@ impl<S: AsyncRead + AsyncWrite> ServerState<S> {
 
     /// Removes a peer from its session and purges the session if it becomes empty.
     pub async fn drop_peer(&self, peer: &Arc<Peer<S>>) {
-        if let Some(session) = peer.session.read().await.upgrade() {
-            let mut peers = session.peers.write().await;
+        if let Some(session) = peer.session.read().upgrade() {
+            let mut peers = session.peers.write();
             peers.remove(&peer.id);
             if peers.is_empty() {
                 info!("purging empty session {}", session);
-                self.sessions.write().await.remove(session.id.as_str());
+                self.sessions.write().remove(session.id.as_str());
             }
         } else {
             warn!("{} has no associated session", *peer);

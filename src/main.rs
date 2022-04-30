@@ -165,7 +165,7 @@ struct Connection<S: AsyncRead + AsyncWrite> {
 }
 
 /// Sets the peer's state and notifies other peers in the same session for state broadcasting.
-async fn set_peer_state<S: AsyncRead + AsyncWrite>(
+fn set_peer_state<S: AsyncRead + AsyncWrite>(
     peer: &Arc<Peer<S>>,
     state: Arc<Vec<u8>>,
 ) -> Result<bool, ServerError> {
@@ -173,7 +173,7 @@ async fn set_peer_state<S: AsyncRead + AsyncWrite>(
         return Ok(false);
     }
 
-    let session = match peer.session.read().await.clone().upgrade() {
+    let session = match peer.session.read().clone().upgrade() {
         None => {
             warn!("peer {} has no associated session yet", *peer);
             return Ok(true);
@@ -181,9 +181,9 @@ async fn set_peer_state<S: AsyncRead + AsyncWrite>(
         Some(session) => session,
     };
 
-    *peer.state.write().await = state;
+    *peer.state.write() = state;
 
-    for session_peer in session.peers.read().await.values() {
+    for session_peer in session.peers.read().values() {
         if session_peer.id == peer.id {
             // don't mark the peer dirty for itself
             continue;
@@ -192,7 +192,6 @@ async fn set_peer_state<S: AsyncRead + AsyncWrite>(
         session_peer
             .state_dirty
             .write()
-            .await
             .insert(peer.id, peer.clone());
     }
 
@@ -204,16 +203,16 @@ async fn join_peer_to_session<S: AsyncRead + AsyncWrite>(
     peer: Arc<Peer<S>>,
     session: &Arc<Session<S>>,
 ) -> Result<(), ServerError> {
-    if peer.session.read().await.upgrade().is_some() {
+    if peer.session.read().upgrade().is_some() {
         return Err(ServerError::new(format!(
             "peer {} is already associated with session {}",
             *peer, *session
         )));
     }
 
-    *peer.session.write().await = Arc::downgrade(session);
+    *peer.session.write() = Arc::downgrade(session);
     info!("JOIN {} to {}", *peer, *session);
-    session.peers.write().await.insert(peer.id, peer);
+    session.peers.write().insert(peer.id, peer);
     Ok(())
 }
 
@@ -226,7 +225,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
     }
 
     async fn do_deliveries(&mut self) -> Result<(), MessageCodecError> {
-        let session = self.peer.session.read().await.upgrade();
+        let session = self.peer.session.read().upgrade();
         if session.is_none() {
             return Ok(());
         }
@@ -284,7 +283,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                 session_id,
             } => {
                 let session = {
-                    let mut sessions = self.peer.server_state.sessions.write().await;
+                    let mut sessions = self.peer.server_state.sessions.write();
                     sessions
                         .entry(session_id.clone())
                         .or_insert_with(|| Session::new(session_id.clone()))
@@ -317,7 +316,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             }
         };
 
-        self.peer.state_dirty.write().await.clear();
+        self.peer.state_dirty.write().clear();
 
         let mut states: Vec<(PeerId, Arc<Vec<u8>>)> = Vec::new();
         states.reserve(peers.len());
@@ -328,7 +327,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             let mut hasher = DefaultHasher::new();
             peer.addr.hash(&mut hasher);
             peer.id.hash(&mut hasher);
-            states.push((hasher.finish(), peer.state.read().await.clone()));
+            states.push((hasher.finish(), peer.state.read().clone()));
         }
 
         self.messages
@@ -342,7 +341,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
     }
 
     async fn handle_update_state(&mut self, state: Arc<Vec<u8>>) -> Result<(), MessageCodecError> {
-        match set_peer_state(&self.peer, state).await {
+        match set_peer_state(&self.peer, state) {
             Ok(true) => Ok(()),
             Ok(false) => {
                 match self
@@ -368,7 +367,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         username: String,
         session: &Arc<Session<S>>,
     ) -> Result<(), MessageCodecError> {
-        *self.peer.username.write().await = Some(username);
+        *self.peer.username.write() = Some(username);
 
         // TODO check auth token
         if true {
@@ -381,7 +380,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                 Ok(dirty) => dirty,
                 Err(e) => return Err(MessageCodecError::new(e.message)),
             };
-            *self.peer.state_dirty.write().await = dirty;
+            *self.peer.state_dirty.write() = dirty;
             self.messages.send(ServerMessage::ServerInfo {}).await?;
             Ok(())
         } else {

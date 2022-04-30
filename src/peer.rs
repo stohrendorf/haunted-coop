@@ -3,6 +3,7 @@ use crate::{
     server::{ServerError, Session},
     ServerState,
 };
+use parking_lot::RwLock;
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -10,11 +11,7 @@ use std::{
     net::SocketAddr,
     sync::{atomic::AtomicBool, Arc, Weak},
 };
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    sync::RwLock,
-    task::block_in_place,
-};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 pub struct Peer<S: AsyncRead + AsyncWrite> {
     pub id: PeerId,
@@ -30,7 +27,7 @@ pub struct Peer<S: AsyncRead + AsyncWrite> {
 
 impl<S: AsyncRead + AsyncWrite> Display for Peer<S> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if let Some(username) = block_in_place(|| self.username.blocking_read().clone()) {
+        if let Some(username) = self.username.read().clone() {
             f.write_fmt(format_args!("{}(#{} `{}`)", self.addr, self.id, username))
         } else {
             f.write_fmt(format_args!("{}(#{})", self.addr, self.id))
@@ -71,7 +68,7 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
         &self,
         all_session_peers: bool,
     ) -> Result<HashMap<PeerId, Arc<Peer<S>>>, ServerError> {
-        let session = if let Some(session) = self.session.read().await.upgrade() {
+        let session = if let Some(session) = self.session.read().upgrade() {
             session
         } else {
             return Err(ServerError::new(format!(
@@ -81,11 +78,11 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
         };
 
         if all_session_peers {
-            let mut peers = session.peers.read().await.clone();
+            let mut peers = session.peers.read().clone();
             peers.remove(&self.id);
             Ok(peers)
         } else {
-            Ok(self.state_dirty.read().await.clone())
+            Ok(self.state_dirty.read().clone())
         }
     }
 }

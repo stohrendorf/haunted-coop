@@ -16,6 +16,7 @@ tokio-stream-ext = "*"
 bytes = "*"
 byteorder = "*"
 num_cpus = "*"
+parking_lot = "*"
 
 [dependencies.tracing]
 version = "*"
