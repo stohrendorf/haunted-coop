@@ -7,7 +7,6 @@ use parking_lot::RwLock;
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
-    io,
     net::SocketAddr,
     sync::{atomic::AtomicBool, Arc, Weak},
 };
@@ -42,12 +41,8 @@ impl<S: AsyncRead + AsyncWrite> PartialEq<Self> for Peer<S> {
 }
 
 impl<S: AsyncRead + AsyncWrite> Peer<S> {
-    pub async fn new(
-        id: PeerId,
-        peer_address: SocketAddr,
-        server_state: &Arc<ServerState<S>>,
-    ) -> io::Result<Arc<Self>> {
-        let peer = Arc::new(Self {
+    pub fn new(id: PeerId, peer_address: SocketAddr, server_state: &Arc<ServerState<S>>) -> Self {
+        Self {
             id,
             username: RwLock::new(None),
             state: RwLock::new(Arc::new(Vec::new())),
@@ -56,15 +51,14 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
             server_state: server_state.clone(),
             full_delivery: AtomicBool::new(false),
             session: RwLock::new(Weak::new()),
-        });
-        Ok(peer)
+        }
     }
 
     /// Get all peers in the same session of this peer that haven't received this peer's state yet.
     ///
     /// If `all_session_peers` is `true`, this will return all peers in the same session, excluding
     /// this peer.
-    pub async fn get_out_of_date_peers(
+    pub fn get_out_of_date_peers(
         &self,
         all_session_peers: bool,
     ) -> Result<HashMap<PeerId, Arc<Peer<S>>>, ServerError> {

@@ -63,8 +63,10 @@ impl<S: AsyncRead + AsyncWrite> ServerState<S> {
     }
 
     /// Removes a peer from its session and purges the session if it becomes empty.
-    pub async fn drop_peer(&self, peer: &Arc<Peer<S>>) {
-        if let Some(session) = peer.session.read().upgrade() {
+    pub fn drop_peer(&self, peer: &Arc<Peer<S>>) {
+        info!("{} DROP", peer);
+        let session = peer.session.read().upgrade();
+        if let Some(session) = session {
             let mut peers = session.peers.write();
             peers.remove(&peer.id);
             if peers.is_empty() {

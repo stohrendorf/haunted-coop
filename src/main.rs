@@ -58,8 +58,7 @@ struct Args {
     worker_threads: usize,
 }
 
-#[tokio::main(flavor = "multi_thread")]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
@@ -110,7 +109,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         handles.push(handle);
     }
 
-    future::try_join_all(handles).await?;
+    runtime
+        .block_on(future::try_join_all(handles))
+        .expect("failed to run server");
 
     Ok(())
 }
@@ -132,14 +133,7 @@ async fn run_server(
         stream.set_nodelay(true)?;
 
         let peer_id = server_state.peer_id_counter.fetch_add(1, Ordering::AcqRel);
-        let peer = match Peer::new(peer_id, addr, &server_state).await {
-            Ok(peer) => peer,
-            Err(e) => {
-                error!("{} peer creation failed: {:?}", addr, e);
-                continue;
-            }
-        };
-
+        let peer = Arc::new(Peer::new(peer_id, addr, &server_state));
         let mut connection = Connection::new(peer, create_timeout_stream(socket_timeout, stream));
 
         tokio::spawn(async move { connection.process().await });
@@ -165,18 +159,15 @@ struct Connection<S: AsyncRead + AsyncWrite> {
 }
 
 /// Sets the peer's state and notifies other peers in the same session for state broadcasting.
-fn set_peer_state<S: AsyncRead + AsyncWrite>(
-    peer: &Arc<Peer<S>>,
-    state: Arc<Vec<u8>>,
-) -> Result<bool, ServerError> {
+fn set_peer_state<S: AsyncRead + AsyncWrite>(peer: &Arc<Peer<S>>, state: Arc<Vec<u8>>) -> bool {
     if state.len() > MAX_STATE_SIZE_BYTES as usize {
-        return Ok(false);
+        return false;
     }
 
     let session = match peer.session.read().clone().upgrade() {
         None => {
             warn!("peer {} has no associated session yet", *peer);
-            return Ok(true);
+            return true;
         }
         Some(session) => session,
     };
@@ -195,11 +186,11 @@ fn set_peer_state<S: AsyncRead + AsyncWrite>(
             .insert(peer.id, peer.clone());
     }
 
-    Ok(true)
+    true
 }
 
 /// Associate a peer with a session.
-async fn join_peer_to_session<S: AsyncRead + AsyncWrite>(
+fn join_peer_to_session<S: AsyncRead + AsyncWrite>(
     peer: Arc<Peer<S>>,
     session: &Arc<Session<S>>,
 ) -> Result<(), ServerError> {
@@ -245,12 +236,12 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                     Some(Ok(msg)) => match self.handle_message(msg).await {
                         Ok(_) => {}
                         Err(e) => {
-                            error!("message handling failed: {:?}", e);
+                            error!("{} message handling failed: {:?}", self.peer, e);
                             break;
                         }
                     },
                     Some(Err(e)) => {
-                        error!("{} {:?}", self.peer, e);
+                        error!("{}, message retrieval failed: {:?}", self.peer, e);
                         break;
                     }
                     None => continue,
@@ -270,7 +261,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             yield_now().await;
         }
 
-        self.peer.server_state.drop_peer(&self.peer).await;
+        self.peer.server_state.drop_peer(&self.peer);
 
         info!("DISCONNECT {}", self.peer);
     }
@@ -309,7 +300,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
     }
 
     async fn send_states(&mut self, full_delivery: bool) -> Result<(), MessageCodecError> {
-        let peers = match self.peer.get_out_of_date_peers(full_delivery).await {
+        let peers = match self.peer.get_out_of_date_peers(full_delivery) {
             Ok(peers) => peers,
             Err(e) => {
                 return Err(MessageCodecError::new(e.message));
@@ -341,24 +332,22 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
     }
 
     async fn handle_update_state(&mut self, state: Arc<Vec<u8>>) -> Result<(), MessageCodecError> {
-        match set_peer_state(&self.peer, state) {
-            Ok(true) => Ok(()),
-            Ok(false) => {
-                match self
-                    .messages
-                    .send(ServerMessage::Failure {
-                        message: "failed to process state update".into(),
-                    })
-                    .await
-                {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        error!("failed to send failure message: {:?}", e);
-                        Err(e)
-                    }
-                }
+        if set_peer_state(&self.peer, state) {
+            return Ok(());
+        }
+
+        match self
+            .messages
+            .send(ServerMessage::Failure {
+                message: "failed to process state update".into(),
+            })
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                error!("failed to send failure message: {:?}", e);
+                Err(e)
             }
-            Err(e) => Err(MessageCodecError::new(e.message)),
         }
     }
 
@@ -372,11 +361,10 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         // TODO check auth token
         if true {
             info!("LOGIN {}", self.peer);
-            match join_peer_to_session(self.peer.clone(), session).await {
-                Ok(_) => {}
-                Err(e) => return Err(MessageCodecError::new(e.message)),
+            if let Err(e) = join_peer_to_session(self.peer.clone(), session) {
+                return Err(MessageCodecError::new(e.message));
             }
-            let dirty = match self.peer.get_out_of_date_peers(true).await {
+            let dirty = match self.peer.get_out_of_date_peers(true) {
                 Ok(dirty) => dirty,
                 Err(e) => return Err(MessageCodecError::new(e.message)),
             };
