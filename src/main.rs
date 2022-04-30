@@ -20,10 +20,10 @@ use std::{
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
-use tokio::net::TcpStream;
 use tokio::{
     io::{AsyncRead, AsyncWrite, BufReader, BufWriter},
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
+    runtime::Builder,
     select,
     task::yield_now,
     time::interval,
@@ -52,6 +52,10 @@ struct Args {
     /// Socket timeout
     #[clap(short, long, default_value = "5")]
     timeout_seconds: u64,
+
+    /// Number of worker threads
+    #[clap(short, long, default_value = "2")]
+    worker_threads: usize,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -70,11 +74,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
         })
         .collect();
 
+    info!(
+        "Detected {} logical and {} physical CPU(s)",
+        num_cpus::get(),
+        num_cpus::get_physical()
+    );
+
+    if args.worker_threads > num_cpus::get() {
+        warn!(
+            "Requested number of worker threads ({}) exceeds logical CPU count ({})",
+            args.worker_threads,
+            num_cpus::get()
+        );
+    }
+
+    let runtime = Builder::new_multi_thread()
+        .worker_threads(args.worker_threads)
+        .build()?;
+
     let mut handles = Vec::new();
 
     for addr in addrs {
         let server_state = server_state.clone();
-        let handle = tokio::spawn(async move {
+        let handle = runtime.spawn(async move {
             run_server(
                 Duration::from_secs(args.timeout_seconds),
                 server_state,

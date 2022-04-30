@@ -442,6 +442,7 @@ dependencies = [
  "bytes 1.1.0",
  "clap",
  "futures 0.3.21",
+ "num_cpus",
  "num_enum",
  "tokio",
  "tokio-io",
