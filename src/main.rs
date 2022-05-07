@@ -270,13 +270,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                 auth_token: _,
                 session_id,
             } => {
-                let session = {
-                    let mut sessions = self.peer.server_state.sessions.write();
-                    sessions
-                        .entry(session_id.clone())
-                        .or_insert_with(|| Session::new(session_id.clone()))
-                        .clone()
-                };
+                let session = self.peer.server_state.get_or_create_session(&session_id);
                 self.handle_login(username, &session).await?;
             }
             ClientMessage::UpdateState { data } => {
