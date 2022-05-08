@@ -35,6 +35,7 @@ mod codec;
 mod io_util;
 mod peer;
 mod server;
+mod test_stream;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -181,7 +182,7 @@ fn set_peer_state<S: AsyncRead + AsyncWrite>(peer: &Arc<Peer<S>>, state: Arc<Vec
         session_peer
             .state_dirty
             .write()
-            .insert(peer.id, peer.clone());
+            .insert(peer.id, Arc::downgrade(peer));
     }
 
     true
@@ -239,7 +240,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                         }
                     },
                     Some(Err(e)) => {
-                        error!("{}, message retrieval failed: {:?}", self.peer, e);
+                        error!("{} message retrieval failed: {:?}", self.peer, e);
                         break;
                     }
                     None => continue,
@@ -298,7 +299,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             }
         };
 
-        self.peer.state_dirty.write().clear();
+        self.peer.clear_dirty();
 
         let mut states: Vec<(PeerId, Arc<Vec<u8>>)> = Vec::new();
         states.reserve(peers.len());
@@ -355,11 +356,18 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             if let Err(e) = join_peer_to_session(self.peer.clone(), session) {
                 return Err(MessageCodecError::new(e.message));
             }
-            let dirty = match self.peer.get_out_of_date_peers(true) {
-                Ok(dirty) => dirty,
-                Err(e) => return Err(MessageCodecError::new(e.message)),
-            };
-            *self.peer.state_dirty.write() = dirty;
+            {
+                let dirty = match self.peer.get_out_of_date_peers(true) {
+                    Ok(dirty) => dirty,
+                    Err(e) => return Err(MessageCodecError::new(e.message)),
+                };
+
+                let mut write_lock = self.peer.state_dirty.write();
+                write_lock.clear();
+                for (peer_id, peer) in dirty {
+                    write_lock.insert(peer_id, Arc::downgrade(&peer));
+                }
+            }
             self.messages.send(ServerMessage::ServerInfo {}).await?;
             Ok(())
         } else {

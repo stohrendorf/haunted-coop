@@ -17,7 +17,7 @@ pub struct Peer<S: AsyncRead + AsyncWrite> {
     pub username: RwLock<Option<String>>,
     pub state: RwLock<Arc<Vec<u8>>>,
     /// The peers which didn't receive the current state yet.
-    pub state_dirty: RwLock<HashMap<PeerId, Arc<Peer<S>>>>,
+    pub state_dirty: RwLock<HashMap<PeerId, Weak<Peer<S>>>>,
     pub addr: SocketAddr,
     pub server_state: Arc<ServerState<S>>,
     pub full_delivery: AtomicBool,
@@ -76,7 +76,18 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
             peers.remove(&self.id);
             Ok(peers)
         } else {
-            Ok(self.state_dirty.read().clone())
+            let peers = self.state_dirty.read().clone();
+            let mut result = HashMap::new();
+            for (peer_id, peer) in peers {
+                if let Some(peer) = peer.upgrade() {
+                    result.insert(peer_id, peer);
+                }
+            }
+            Ok(result)
         }
+    }
+
+    pub fn clear_dirty(&self) {
+        self.state_dirty.write().clear();
     }
 }

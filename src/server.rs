@@ -89,56 +89,8 @@ impl<S: AsyncRead + AsyncWrite> ServerState<S> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{join_peer_to_session, Peer, ServerState, Session};
-    use std::{
-        io::{Error, IoSlice},
-        pin::Pin,
-        sync::Arc,
-        task::{Context, Poll},
-    };
-    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-
-    struct TestStream {}
-
-    impl AsyncRead for TestStream {
-        fn poll_read(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &mut ReadBuf<'_>,
-        ) -> Poll<std::io::Result<()>> {
-            unimplemented!()
-        }
-    }
-
-    impl AsyncWrite for TestStream {
-        fn poll_write(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &[u8],
-        ) -> Poll<Result<usize, Error>> {
-            unimplemented!()
-        }
-
-        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-            unimplemented!()
-        }
-
-        fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-            unimplemented!()
-        }
-
-        fn poll_write_vectored(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            bufs: &[IoSlice<'_>],
-        ) -> Poll<Result<usize, Error>> {
-            unimplemented!()
-        }
-
-        fn is_write_vectored(&self) -> bool {
-            unimplemented!()
-        }
-    }
+    use crate::{join_peer_to_session, test_stream::TestStream, Peer, ServerState};
+    use std::sync::Arc;
 
     #[test]
     fn test_get_or_create_session() {
