@@ -178,7 +178,7 @@ impl Display for MessageCodecError {
 impl From<std::io::Error> for MessageCodecError {
     fn from(e: std::io::Error) -> Self {
         Self {
-            message: e.to_string(),
+            message: format!("{:?}", e),
         }
     }
 }
@@ -190,43 +190,65 @@ pub struct MessageCodec {}
 
 /// Tries to read a [`ClientMessageTypeId::Login`] from the client. Returns [`None`] if the data is
 /// incomplete.
-fn try_read_login(src: &mut Reader<BytesMut>) -> Option<ClientMessage> {
+fn try_read_login(src: &mut Reader<BytesMut>) -> Result<Option<ClientMessage>, MessageCodecError> {
     let username = match src.read_pstring() {
         Ok(x) => x,
-        Err(_) => return None,
+        Err(e) => {
+            if e.kind() == ErrorKind::InvalidData {
+                return Ok(None);
+            }
+
+            return Err(MessageCodecError::from(e));
+        }
     };
     let auth_token = match src.read_pstring() {
         Ok(x) => x,
-        Err(_) => return None,
+        Err(_) => return Ok(None),
     };
     let session_id = match src.read_pstring() {
         Ok(x) => x,
-        Err(_) => return None,
+        Err(_) => return Ok(None),
     };
-    Some(ClientMessage::Login {
+    Ok(Some(ClientMessage::Login {
         username,
         auth_token,
         session_id,
-    })
+    }))
 }
 
 /// Tries to read a [`ClientMessageTypeId::UpdateState`] from the client. Returns [`None`] if the
 /// data is incomplete.
-fn try_read_update_state(src: &mut Reader<BytesMut>) -> Option<ClientMessage> {
+fn try_read_update_state(
+    src: &mut Reader<BytesMut>,
+) -> Result<Option<ClientMessage>, MessageCodecError> {
     let data = match src.read_pbuffer(MAX_STATE_SIZE_BYTES) {
         Ok(x) => x,
-        Err(_) => return None,
+        Err(e) => {
+            if e.kind() == ErrorKind::InvalidData {
+                return Ok(None);
+            }
+
+            return Err(MessageCodecError::from(e));
+        }
     };
-    Some(ClientMessage::UpdateState { data })
+    Ok(Some(ClientMessage::UpdateState { data }))
 }
 
 /// Tries to read a [`ClientMessageTypeId::Failure`].
-fn try_read_failure(src: &mut Reader<BytesMut>) -> Option<ClientMessage> {
+fn try_read_failure(
+    src: &mut Reader<BytesMut>,
+) -> Result<Option<ClientMessage>, MessageCodecError> {
     let message = match src.read_pstring() {
         Ok(x) => x,
-        Err(_) => return None,
+        Err(e) => {
+            if e.kind() == ErrorKind::InvalidData {
+                return Ok(None);
+            }
+
+            return Err(MessageCodecError::from(e));
+        }
     };
-    Some(ClientMessage::Failure { message })
+    Ok(Some(ClientMessage::Failure { message }))
 }
 
 impl MessageCodec {
@@ -237,16 +259,17 @@ impl MessageCodec {
 
 /// Tries to apply `f` on the `reader` and return its result. Replaces `src` if `f` returns a
 /// result, otherwise leaves it untouched.
-fn try_read<F, R>(src: &mut BytesMut, mut reader: Reader<BytesMut>, f: F) -> Option<R>
+fn try_read<F, R, E>(src: &mut BytesMut, mut reader: Reader<BytesMut>, f: F) -> Result<Option<R>, E>
 where
-    F: FnOnce(&mut Reader<BytesMut>) -> Option<R>,
+    F: FnOnce(&mut Reader<BytesMut>) -> Result<Option<R>, E>,
 {
     match f(&mut reader) {
-        None => None,
-        Some(result) => {
+        Ok(None) => Ok(None),
+        Ok(Some(result)) => {
             *src = reader.into_inner();
-            Some(result)
+            Ok(Some(result))
         }
+        Err(e) => Err(e),
     }
 }
 
@@ -264,29 +287,29 @@ impl Decoder for MessageCodec {
                     return Ok(None);
                 }
 
-                return Err(MessageCodecError {
-                    message: format!("Failed to read data: {:?}", e),
-                });
+                return Err(MessageCodecError::from(e));
             }
         };
 
         return match ClientMessageTypeId::try_from(id) {
-            Ok(ClientMessageTypeId::Login) => Ok(try_read(src, reader, try_read_login)),
-            Ok(ClientMessageTypeId::UpdateState) => {
-                Ok(try_read(src, reader, try_read_update_state))
-            }
+            Ok(ClientMessageTypeId::Login) => try_read(src, reader, try_read_login),
+            Ok(ClientMessageTypeId::UpdateState) => try_read(src, reader, try_read_update_state),
             Ok(ClientMessageTypeId::StateQuery) => {
                 *src = reader.into_inner();
                 Ok(Some(ClientMessage::StateQuery {}))
             }
             Ok(ClientMessageTypeId::Failure) => match try_read(src, reader, try_read_failure) {
-                None => Ok(None),
-                Some(ClientMessage::Failure { message }) => Err(MessageCodecError { message }),
-                Some(x) => panic!("expected failure message, got {:?}", x),
+                Ok(None) => Ok(None),
+                Ok(Some(ClientMessage::Failure { message })) => {
+                    Err(MessageCodecError::new(message))
+                }
+                Ok(Some(x)) => panic!("expected failure message, got {:?}", x),
+                Err(e) => Err(e),
             },
-            Err(_) => Err(MessageCodecError {
-                message: format!("Invalid message ID `{}`", id),
-            }),
+            Err(_) => Err(MessageCodecError::new(format!(
+                "Invalid message ID `{}`",
+                id
+            ))),
         };
     }
 }
@@ -297,12 +320,13 @@ impl Encoder<ServerMessage> for MessageCodec {
     fn encode(&mut self, data: ServerMessage, buf: &mut BytesMut) -> Result<(), MessageCodecError> {
         match data {
             ServerMessage::FullSync { states } => {
+                if states.len() > u8::MAX as usize {
+                    panic!();
+                }
+
                 {
                     let mut w = buf.writer();
                     w.write_u8(ServerMessageTypeId::FullSync.into())?;
-                    if states.len() > u8::MAX as usize {
-                        panic!();
-                    }
                     w.write_u8(states.len() as u8)?;
                 }
 
