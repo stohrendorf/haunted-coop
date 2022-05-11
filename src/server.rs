@@ -77,11 +77,11 @@ impl ServerState {
         }
     }
 
-    pub fn get_or_create_session(&self, session_id: &String) -> Arc<Session> {
+    pub fn get_or_create_session(&self, session_id: &str) -> Arc<Session> {
         let mut sessions = self.sessions.write();
         sessions
-            .entry(session_id.clone())
-            .or_insert_with(|| Session::new(session_id.clone()))
+            .entry(session_id.to_owned())
+            .or_insert_with(|| Session::new(session_id.to_owned()))
             .clone()
     }
 }
