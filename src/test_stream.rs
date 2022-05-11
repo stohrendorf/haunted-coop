@@ -1,50 +1,53 @@
 #![cfg(test)]
 
 use std::{
-    io::{Error, IoSlice},
+    io::Error,
     pin::Pin,
     task::{Context, Poll},
 };
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-pub struct TestStream {}
+pub struct TestStream {
+    data: Vec<u8>,
+    pub written: Vec<u8>,
+}
+
+impl TestStream {
+    pub fn new(data: Vec<u8>) -> Self {
+        Self {
+            data,
+            written: Vec::new(),
+        }
+    }
+}
 
 impl AsyncRead for TestStream {
     fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
-        unimplemented!()
+        buf.put_slice(self.data.as_slice());
+        self.data.clear();
+        Poll::Ready(Ok(()))
     }
 }
 
 impl AsyncWrite for TestStream {
     fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
+        mut self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, Error>> {
-        unimplemented!()
+        self.written.extend_from_slice(buf);
+        Poll::Ready(Ok(buf.len()))
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        unimplemented!()
+    fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        Poll::Ready(Ok(()))
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        unimplemented!()
-    }
-
-    fn poll_write_vectored(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        bufs: &[IoSlice<'_>],
-    ) -> Poll<Result<usize, Error>> {
-        unimplemented!()
-    }
-
-    fn is_write_vectored(&self) -> bool {
-        unimplemented!()
+    fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
+        Poll::Ready(Ok(()))
     }
 }

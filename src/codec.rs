@@ -363,3 +363,32 @@ impl Encoder<ServerMessage> for MessageCodec {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{io_util::WritePascalExt, test_stream::TestStream, MessageCodec};
+    use futures::StreamExt;
+    use ntest::timeout;
+    use tokio::runtime::Builder;
+    use tokio_util::codec::Decoder;
+
+    #[test]
+    #[timeout(20)]
+    fn test_incomplete_data() {
+        let mut b = Vec::new();
+        b.write_pbuffer(&[1, 2, 3]).unwrap();
+        b[0] = 99;
+        let mut c = MessageCodec::new().framed(TestStream::new(b));
+
+        let runtime = Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_io()
+            .enable_time()
+            .build()
+            .unwrap();
+        runtime
+            .block_on(c.next())
+            .unwrap()
+            .expect_err("message codec must fail");
+    }
+}

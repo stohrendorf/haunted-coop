@@ -442,6 +442,7 @@ dependencies = [
  "bytes 1.1.0",
  "clap",
  "futures 0.3.21",
+ "ntest",
  "num_cpus",
  "num_enum",
  "parking_lot",
@@ -563,6 +564,47 @@ dependencies = [
  "log",
  "wasi",
  "windows-sys",
+]
+
+[[package]]
+name = "ntest"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c544e496c816f0a59645c0bb69097e453df203954ae2ed4b3ac4251fad69d44"
+dependencies = [
+ "ntest_proc_macro_helper",
+ "ntest_test_cases",
+ "ntest_timeout",
+]
+
+[[package]]
+name = "ntest_proc_macro_helper"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f52e34b414605b77efc95c3f0ecef01df0c324bcc7f68d9a9cb7a7552777e52"
+
+[[package]]
+name = "ntest_test_cases"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99a81eb400abc87063f829560bc5c5c835177703b83d1cd991960db0b2a00abe"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "ntest_timeout"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b10db009e117aca57cbfb70ac332348f9a89d09ff7204497c283c0f7a0c96323"
+dependencies = [
+ "ntest_proc_macro_helper",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
