@@ -135,7 +135,10 @@ mod tests {
     fn test_write_pbuffer_too_long() {
         let buf = BytesMut::new();
         let mut w = buf.writer();
-        assert!(matches!(w.write_pbuffer(&[1u8].repeat(65536)), Err(_)));
+        assert!(matches!(
+            w.write_pbuffer(&[1u8].repeat(u16::MAX as usize + 1)),
+            Err(_)
+        ));
     }
 
     #[test]
