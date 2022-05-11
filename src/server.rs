@@ -6,16 +6,15 @@ use std::{
     fmt::{Debug, Display, Formatter},
     sync::{atomic::AtomicU64, Arc},
 };
-use tokio::io::{AsyncRead, AsyncWrite};
 use tracing::{info, warn};
 
-pub struct Session<S: AsyncRead + AsyncWrite> {
+pub struct Session {
     id: String,
     /// The peers within this session.
-    pub peers: RwLock<HashMap<PeerId, Arc<Peer<S>>>>,
+    pub peers: RwLock<HashMap<PeerId, Arc<Peer>>>,
 }
 
-impl<S: AsyncRead + AsyncWrite> Session<S> {
+impl Session {
     pub fn new(id: String) -> Arc<Self> {
         Arc::new(Self {
             id,
@@ -24,14 +23,14 @@ impl<S: AsyncRead + AsyncWrite> Session<S> {
     }
 }
 
-impl<S: AsyncRead + AsyncWrite> Display for Session<S> {
+impl Display for Session {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("`{}`", self.id))
     }
 }
 
-pub struct ServerState<S: AsyncRead + AsyncWrite> {
-    pub sessions: RwLock<HashMap<String, Arc<Session<S>>>>,
+pub struct ServerState {
+    pub sessions: RwLock<HashMap<String, Arc<Session>>>,
     pub peer_id_counter: AtomicU64,
 }
 
@@ -54,7 +53,7 @@ impl Display for ServerError {
 
 impl Error for ServerError {}
 
-impl<S: AsyncRead + AsyncWrite> ServerState<S> {
+impl ServerState {
     pub fn new() -> Self {
         Self {
             sessions: RwLock::new(HashMap::new()),
@@ -63,7 +62,7 @@ impl<S: AsyncRead + AsyncWrite> ServerState<S> {
     }
 
     /// Removes a peer from its session and purges the session if it becomes empty.
-    pub fn drop_peer(&self, peer: &Arc<Peer<S>>) {
+    pub fn drop_peer(&self, peer: &Arc<Peer>) {
         info!("{} DROP", peer);
         let session = peer.session.read().upgrade();
         if let Some(session) = session {
@@ -78,7 +77,7 @@ impl<S: AsyncRead + AsyncWrite> ServerState<S> {
         }
     }
 
-    pub fn get_or_create_session(&self, session_id: &String) -> Arc<Session<S>> {
+    pub fn get_or_create_session(&self, session_id: &String) -> Arc<Session> {
         let mut sessions = self.sessions.write();
         sessions
             .entry(session_id.clone())
@@ -89,12 +88,12 @@ impl<S: AsyncRead + AsyncWrite> ServerState<S> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{join_peer_to_session, test_stream::TestStream, Peer, ServerState};
+    use crate::{join_peer_to_session, Peer, ServerState};
     use std::sync::Arc;
 
     #[test]
     fn test_get_or_create_session() {
-        let server: Arc<ServerState<TestStream>> = Arc::new(ServerState::new());
+        let server: Arc<ServerState> = Arc::new(ServerState::new());
         let session_id: String = "abc".into();
         let session = server.get_or_create_session(&session_id);
 
@@ -116,7 +115,7 @@ mod tests {
 
     #[test]
     fn test_join_peer_to_session() {
-        let server: Arc<ServerState<TestStream>> = Arc::new(ServerState::new());
+        let server: Arc<ServerState> = Arc::new(ServerState::new());
         let addr = "127.0.0.1:1234".parse().unwrap();
         let peer_id = 123u64;
         let peer = Arc::new(Peer::new(peer_id, addr, &server));
@@ -139,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_drop_peer() {
-        let server: Arc<ServerState<TestStream>> = Arc::new(ServerState::new());
+        let server: Arc<ServerState> = Arc::new(ServerState::new());
         let addr = "127.0.0.1:1234".parse().unwrap();
         let peer_id = 123u64;
         let peer = Arc::new(Peer::new(peer_id, addr, &server));

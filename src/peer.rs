@@ -10,21 +10,20 @@ use std::{
     net::SocketAddr,
     sync::{atomic::AtomicBool, Arc, Weak},
 };
-use tokio::io::{AsyncRead, AsyncWrite};
 
-pub struct Peer<S: AsyncRead + AsyncWrite> {
+pub struct Peer {
     pub id: PeerId,
     pub username: RwLock<Option<String>>,
     pub state: RwLock<Arc<Vec<u8>>>,
     /// The peers which didn't receive the current state yet.
-    pub state_dirty: RwLock<HashMap<PeerId, Weak<Peer<S>>>>,
+    pub state_dirty: RwLock<HashMap<PeerId, Weak<Peer>>>,
     pub addr: SocketAddr,
-    pub server_state: Arc<ServerState<S>>,
+    pub server_state: Arc<ServerState>,
     pub full_delivery: AtomicBool,
-    pub session: RwLock<Weak<Session<S>>>,
+    pub session: RwLock<Weak<Session>>,
 }
 
-impl<S: AsyncRead + AsyncWrite> Display for Peer<S> {
+impl Display for Peer {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(username) = self.username.read().clone() {
             f.write_fmt(format_args!("{}(#{} `{}`)", self.addr, self.id, username))
@@ -34,14 +33,14 @@ impl<S: AsyncRead + AsyncWrite> Display for Peer<S> {
     }
 }
 
-impl<S: AsyncRead + AsyncWrite> PartialEq<Self> for Peer<S> {
+impl PartialEq<Self> for Peer {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
     }
 }
 
-impl<S: AsyncRead + AsyncWrite> Peer<S> {
-    pub fn new(id: PeerId, peer_address: SocketAddr, server_state: &Arc<ServerState<S>>) -> Self {
+impl Peer {
+    pub fn new(id: PeerId, peer_address: SocketAddr, server_state: &Arc<ServerState>) -> Self {
         Self {
             id,
             username: RwLock::new(None),
@@ -61,7 +60,7 @@ impl<S: AsyncRead + AsyncWrite> Peer<S> {
     pub fn get_out_of_date_peers(
         &self,
         all_session_peers: bool,
-    ) -> Result<HashMap<PeerId, Arc<Peer<S>>>, ServerError> {
+    ) -> Result<HashMap<PeerId, Arc<Peer>>, ServerError> {
         let session = if let Some(session) = self.session.read().upgrade() {
             session
         } else {

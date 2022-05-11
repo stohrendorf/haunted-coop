@@ -22,7 +22,7 @@ use std::{
 };
 use tokio::{
     io::{AsyncRead, AsyncWrite, BufReader, BufWriter},
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     runtime::Builder,
     select,
     time::interval,
@@ -118,7 +118,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 async fn run_server(
     socket_timeout: Duration,
-    server_state: Arc<ServerState<BufWriter<TimeoutWriter<BufReader<TimeoutReader<TcpStream>>>>>>,
+    server_state: Arc<ServerState>,
     addr: SocketAddr,
 ) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(addr).await?;
@@ -143,7 +143,7 @@ async fn run_server(
 fn create_timeout_stream<S: AsyncRead + AsyncWrite>(
     timeout: Duration,
     stream: S,
-) -> BufWriter<TimeoutWriter<BufReader<TimeoutReader<S>>>> {
+) -> impl AsyncRead + AsyncWrite {
     let mut timeout_stream = TimeoutReader::new(stream);
     timeout_stream.set_timeout(Some(timeout));
     let reader = BufReader::new(timeout_stream);
@@ -153,12 +153,12 @@ fn create_timeout_stream<S: AsyncRead + AsyncWrite>(
 }
 
 struct Connection<S: AsyncRead + AsyncWrite> {
-    peer: Arc<Peer<S>>,
+    peer: Arc<Peer>,
     messages: Pin<Box<Framed<S, MessageCodec>>>,
 }
 
 /// Sets the peer's state and notifies other peers in the same session for state broadcasting.
-fn set_peer_state<S: AsyncRead + AsyncWrite>(peer: &Arc<Peer<S>>, state: Arc<Vec<u8>>) -> bool {
+fn set_peer_state(peer: &Arc<Peer>, state: Arc<Vec<u8>>) -> bool {
     if state.len() > MAX_STATE_SIZE_BYTES as usize {
         return false;
     }
@@ -189,10 +189,7 @@ fn set_peer_state<S: AsyncRead + AsyncWrite>(peer: &Arc<Peer<S>>, state: Arc<Vec
 }
 
 /// Associate a peer with a session.
-fn join_peer_to_session<S: AsyncRead + AsyncWrite>(
-    peer: Arc<Peer<S>>,
-    session: &Arc<Session<S>>,
-) -> Result<(), ServerError> {
+fn join_peer_to_session(peer: Arc<Peer>, session: &Arc<Session>) -> Result<(), ServerError> {
     if peer.session.read().upgrade().is_some() {
         return Err(ServerError::new(format!(
             "peer {} is already associated with session {}",
@@ -207,7 +204,7 @@ fn join_peer_to_session<S: AsyncRead + AsyncWrite>(
 }
 
 impl<S: AsyncRead + AsyncWrite> Connection<S> {
-    pub fn new(peer: Arc<Peer<S>>, stream: S) -> Self {
+    pub fn new(peer: Arc<Peer>, stream: S) -> Self {
         Self {
             peer,
             messages: Box::pin(MessageCodec::new().framed(stream)),
@@ -346,7 +343,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
     async fn handle_login(
         &mut self,
         username: String,
-        session: &Arc<Session<S>>,
+        session: &Arc<Session>,
     ) -> Result<(), MessageCodecError> {
         *self.peer.username.write() = Some(username);
 
