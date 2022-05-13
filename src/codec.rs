@@ -21,7 +21,7 @@ pub const PROTOCOL_VERSION: u16 = 0;
 pub const MAX_STATE_SIZE_BYTES: u16 = 5000;
 
 /// Client message IDs. Prefixed to every message sent from the client.
-#[derive(Debug, Eq, PartialEq, TryFromPrimitive)]
+#[derive(Debug, Eq, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u8)]
 pub enum ClientMessageTypeId {
     /// # Description
@@ -366,29 +366,73 @@ impl Encoder<ServerMessage> for MessageCodec {
 
 #[cfg(test)]
 mod tests {
-    use crate::{io_util::WritePascalExt, test_stream::TestStream, MessageCodec};
+    use crate::{
+        codec::ClientMessageTypeId, io_util::WritePascalExt, test_stream::TestStream,
+        ClientMessage, MessageCodec,
+    };
+    use byteorder::WriteBytesExt;
     use futures::StreamExt;
     use ntest::timeout;
-    use tokio::runtime::Builder;
+    use tokio::runtime::{Builder, Runtime};
     use tokio_util::codec::Decoder;
 
     #[test]
     #[timeout(20)]
-    fn test_incomplete_data() {
-        let mut b = Vec::new();
-        b.write_pbuffer(&[1, 2, 3]).unwrap();
-        b[0] = 99;
-        let mut c = MessageCodec::new().framed(TestStream::new(b));
+    fn test_complete_body() {
+        let mut data = Vec::new();
+        data.write_u8(ClientMessageTypeId::UpdateState.into())
+            .unwrap();
+        data.write_pbuffer(&[1, 2, 3]).unwrap();
+        let mut framed = MessageCodec::new().framed(TestStream::new(data));
+        match create_runtime().block_on(framed.next()).unwrap().unwrap() {
+            ClientMessage::UpdateState { data } => assert_eq!(data, [1, 2, 3]),
+            _ => panic!(),
+        }
+    }
 
-        let runtime = Builder::new_multi_thread()
+    #[test]
+    #[timeout(20)]
+    fn test_incomplete_body() {
+        let mut data = Vec::new();
+        data.write_u8(ClientMessageTypeId::UpdateState.into())
+            .unwrap();
+        data.write_pbuffer(&[1, 2, 3]).unwrap();
+        data.resize(data.len() - 1, 0);
+        expect_codec_failure(data);
+    }
+
+    #[test]
+    #[timeout(20)]
+    fn test_missing_body() {
+        let mut data = Vec::new();
+        data.write_u8(ClientMessageTypeId::UpdateState.into())
+            .unwrap();
+        expect_codec_failure(data);
+    }
+
+    #[test]
+    #[timeout(20)]
+    fn test_invalid_message_id() {
+        let mut data = Vec::new();
+        data.write_u8(99).unwrap();
+        expect_codec_failure(data);
+    }
+
+    fn expect_codec_failure(data: Vec<u8>) {
+        let mut framed = MessageCodec::new().framed(TestStream::new(data));
+
+        create_runtime()
+            .block_on(framed.next())
+            .unwrap()
+            .expect_err("message codec must fail");
+    }
+
+    fn create_runtime() -> Runtime {
+        Builder::new_multi_thread()
             .worker_threads(2)
             .enable_io()
             .enable_time()
             .build()
-            .unwrap();
-        runtime
-            .block_on(c.next())
             .unwrap()
-            .expect_err("message codec must fail");
     }
 }
