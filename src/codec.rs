@@ -194,7 +194,7 @@ fn try_read_login(src: &mut Reader<BytesMut>) -> Result<Option<ClientMessage>, M
     let username = match src.read_pstring() {
         Ok(x) => x,
         Err(e) => {
-            if e.kind() == ErrorKind::InvalidData {
+            if e.kind() == ErrorKind::InvalidData || e.kind() == ErrorKind::UnexpectedEof {
                 return Ok(None);
             }
 
@@ -224,7 +224,7 @@ fn try_read_update_state(
     let data = match src.read_pbuffer(MAX_STATE_SIZE_BYTES) {
         Ok(x) => x,
         Err(e) => {
-            if e.kind() == ErrorKind::InvalidData {
+            if e.kind() == ErrorKind::InvalidData || e.kind() == ErrorKind::UnexpectedEof {
                 return Ok(None);
             }
 
@@ -241,7 +241,7 @@ fn try_read_failure(
     let message = match src.read_pstring() {
         Ok(x) => x,
         Err(e) => {
-            if e.kind() == ErrorKind::InvalidData {
+            if e.kind() == ErrorKind::InvalidData || e.kind() == ErrorKind::UnexpectedEof {
                 return Ok(None);
             }
 
