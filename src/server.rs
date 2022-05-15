@@ -25,7 +25,11 @@ impl Session {
 
 impl Display for Session {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("`{}`", self.id))
+        f.write_fmt(format_args!(
+            "`{}`(size {})",
+            self.id,
+            self.peers.read().len()
+        ))
     }
 }
 
