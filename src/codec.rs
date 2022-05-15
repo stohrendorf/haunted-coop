@@ -366,13 +366,14 @@ impl Encoder<ServerMessage> for MessageCodec {
 
 #[cfg(test)]
 mod tests {
+    use crate::test_stream::StreamBuilder;
     use crate::{
         codec::ClientMessageTypeId, io_util::WritePascalExt, test_stream::TestStream,
         ClientMessage, MessageCodec,
     };
     use byteorder::WriteBytesExt;
     use futures::StreamExt;
-    use ntest::timeout;
+    use ntest::{test_case, timeout};
     use tokio::runtime::{Builder, Runtime};
     use tokio_util::codec::Decoder;
 
@@ -390,36 +391,67 @@ mod tests {
         }
     }
 
-    #[test]
-    #[timeout(20)]
-    fn test_incomplete_body() {
+    #[test_case(0)]
+    #[timeout(100)]
+    #[test_case(2)]
+    #[timeout(100)]
+    fn test_incomplete_body(chunk_size: usize) {
         let mut data = Vec::new();
         data.write_u8(ClientMessageTypeId::UpdateState.into())
             .unwrap();
         data.write_pbuffer(&[1, 2, 3]).unwrap();
         data.resize(data.len() - 1, 0);
-        expect_codec_failure(data);
+        expect_codec_failure(
+            data,
+            if chunk_size > 0 {
+                Some(chunk_size)
+            } else {
+                None
+            },
+        );
     }
 
-    #[test]
-    #[timeout(20)]
-    fn test_missing_body() {
+    #[test_case(0)]
+    #[timeout(100)]
+    #[test_case(2)]
+    #[timeout(100)]
+    fn test_missing_body(chunk_size: usize) {
         let mut data = Vec::new();
         data.write_u8(ClientMessageTypeId::UpdateState.into())
             .unwrap();
-        expect_codec_failure(data);
+        expect_codec_failure(
+            data,
+            if chunk_size > 0 {
+                Some(chunk_size)
+            } else {
+                None
+            },
+        );
     }
 
-    #[test]
-    #[timeout(20)]
-    fn test_invalid_message_id() {
+    #[test_case(0)]
+    #[timeout(100)]
+    #[test_case(2)]
+    #[timeout(100)]
+    fn test_invalid_message_id(chunk_size: usize) {
         let mut data = Vec::new();
         data.write_u8(99).unwrap();
-        expect_codec_failure(data);
+        expect_codec_failure(
+            data,
+            if chunk_size > 0 {
+                Some(chunk_size)
+            } else {
+                None
+            },
+        );
     }
 
-    fn expect_codec_failure(data: Vec<u8>) {
-        let mut framed = MessageCodec::new().framed(TestStream::new(data));
+    fn expect_codec_failure(data: Vec<u8>, chunk_size: Option<usize>) {
+        let mut stream = StreamBuilder::new(data);
+        if let Some(chunk_size) = chunk_size {
+            stream.chunked(chunk_size);
+        }
+        let mut framed = MessageCodec::new().framed(stream.build());
 
         create_runtime()
             .block_on(framed.next())
