@@ -1,7 +1,7 @@
 FROM rust:1.60-slim as builder
 WORKDIR /usr/src/haunted-coop
 COPY . .
-RUN cargo test && cargo install --path .
+RUN cargo test && cargo install --path . --locked
 
 FROM rust:1.60-slim-buster
 # RUN apt-get update && apt-get install -y extra-runtime-dependencies && rm -rf /var/lib/apt/lists/*
