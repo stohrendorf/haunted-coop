@@ -239,8 +239,11 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                     Some(Err(e)) => {
                         error!("{} message retrieval failed: {:?}", self.peer, e);
                         break;
-                    }
-                    None => continue,
+                    },
+                    None => {
+                        info!("{} message retrieval ended", self.peer);
+                        break;
+                    },
                 },
                 _ = delivery_ticker.tick() => {
                     if let Err(e) = self.do_deliveries().await {
