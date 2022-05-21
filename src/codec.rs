@@ -264,12 +264,11 @@ where
     F: FnOnce(&mut Reader<BytesMut>) -> Result<Option<R>, E>,
 {
     match f(&mut reader) {
-        Ok(None) => Ok(None),
         Ok(Some(result)) => {
             *src = reader.into_inner();
             Ok(Some(result))
         }
-        Err(e) => Err(e),
+        other => other,
     }
 }
 
