@@ -70,9 +70,12 @@ impl ServerState {
         info!("{} DROP", peer);
         let session = peer.session.read().upgrade();
         if let Some(session) = session {
-            let mut peers = session.peers.write();
-            peers.remove(&peer.id);
-            if peers.is_empty() {
+            let purge_session = {
+                let mut peers = session.peers.write();
+                peers.remove(&peer.id);
+                peers.is_empty()
+            };
+            if purge_session {
                 info!("purging empty session {}", session);
                 self.sessions.write().remove(session.id.as_str());
             }
