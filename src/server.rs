@@ -69,6 +69,7 @@ impl ServerState {
     pub fn drop_peer(&self, peer: &Arc<Peer>) {
         info!("{} DROP", peer);
         let session = peer.session.read().upgrade();
+        let mut sessions = self.sessions.write();
         if let Some(session) = session {
             let purge_session = {
                 let mut peers = session.peers.write();
@@ -77,7 +78,7 @@ impl ServerState {
             };
             if purge_session {
                 info!("purging empty session {}", session);
-                self.sessions.write().remove(session.id.as_str());
+                sessions.remove(session.id.as_str());
             }
         } else {
             warn!("{} has no associated session", *peer);
