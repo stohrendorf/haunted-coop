@@ -14,7 +14,7 @@ use std::{
 pub struct Peer {
     pub id: PeerId,
     pub username: RwLock<Option<String>>,
-    pub state: RwLock<Arc<Vec<u8>>>,
+    pub state: RwLock<Option<Arc<Vec<u8>>>>,
     /// The peers which didn't receive the current state yet.
     pub state_dirty: RwLock<HashMap<PeerId, Weak<Peer>>>,
     pub addr: SocketAddr,
@@ -44,7 +44,7 @@ impl Peer {
         Self {
             id,
             username: RwLock::new(None),
-            state: RwLock::new(Arc::new(Vec::new())),
+            state: RwLock::new(None),
             state_dirty: RwLock::new(HashMap::new()),
             addr: peer_address,
             server_state: server_state.clone(),

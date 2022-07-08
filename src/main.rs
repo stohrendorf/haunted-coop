@@ -171,7 +171,7 @@ fn set_peer_state(peer: &Arc<Peer>, state: Arc<Vec<u8>>) -> bool {
         Some(session) => session,
     };
 
-    *peer.state.write() = state;
+    *peer.state.write() = Some(state);
 
     for session_peer in session.peers.read().values() {
         if session_peer.id == peer.id {
@@ -310,7 +310,9 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             let mut hasher = DefaultHasher::new();
             peer.addr.hash(&mut hasher);
             peer.id.hash(&mut hasher);
-            states.push((hasher.finish(), peer.state.read().clone()));
+            if let Some(peer_state) = peer.state.read().clone() {
+                states.push((hasher.finish(), peer_state));
+            }
         }
 
         self.messages
