@@ -290,7 +290,7 @@ impl Decoder for MessageCodec {
             }
         };
 
-        return match ClientMessageTypeId::try_from(id) {
+        match ClientMessageTypeId::try_from(id) {
             Ok(ClientMessageTypeId::Login) => try_read(src, reader, try_read_login),
             Ok(ClientMessageTypeId::UpdateState) => try_read(src, reader, try_read_update_state),
             Ok(ClientMessageTypeId::StateQuery) => {
@@ -309,7 +309,7 @@ impl Decoder for MessageCodec {
                 "Invalid message ID `{}`",
                 id
             ))),
-        };
+        }
     }
 }
 
