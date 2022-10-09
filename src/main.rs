@@ -44,8 +44,7 @@ struct Args {
     #[clap(
         short,
         long,
-        default_values = &["127.0.0.1:1996", "[::1]:1996"],
-        multiple_occurrences(true)
+        default_values = vec!["127.0.0.1:1996", "[::1]:1996"]
     )]
     listen: Vec<String>,
 
