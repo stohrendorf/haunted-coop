@@ -236,7 +236,9 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                         }
                     },
                     Some(Err(e)) => {
-                        error!("{} message retrieval failed: {:?}", self.peer, e);
+                        if !e.is_connection_reset {
+                            error!("{} message retrieval failed: {:?}", self.peer, e);
+                        }
                         break;
                     },
                     None => {
@@ -280,10 +282,10 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                 self.peer.full_delivery.store(true, Ordering::Release);
             }
             ClientMessage::Failure { message } => {
-                return Err(MessageCodecError::new(format!(
-                    "{} sent unexpected failure: `{}`",
-                    self.peer, message
-                )))
+                return Err(MessageCodecError::new(
+                    format!("{} sent unexpected failure: `{}`", self.peer, message),
+                    false,
+                ))
             }
         }
 
@@ -294,7 +296,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         let peers = match self.peer.get_out_of_date_peers(full_delivery) {
             Ok(peers) => peers,
             Err(e) => {
-                return Err(MessageCodecError::new(e.message));
+                return Err(MessageCodecError::new(e.message, false));
             }
         };
 
@@ -355,12 +357,12 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         if true {
             info!("LOGIN {}", self.peer);
             if let Err(e) = join_peer_to_session(self.peer.clone(), session) {
-                return Err(MessageCodecError::new(e.message));
+                return Err(MessageCodecError::new(e.message, false));
             }
             {
                 let dirty = match self.peer.get_out_of_date_peers(true) {
                     Ok(dirty) => dirty,
-                    Err(e) => return Err(MessageCodecError::new(e.message)),
+                    Err(e) => return Err(MessageCodecError::new(e.message, false)),
                 };
 
                 let mut write_lock = self.peer.state_dirty.write();
@@ -378,7 +380,10 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                     message: "authentication failed".into(),
                 })
                 .await?;
-            Err(MessageCodecError::new("invalid user credentials".into()))
+            Err(MessageCodecError::new(
+                "invalid user credentials".into(),
+                false,
+            ))
         }
     }
 }

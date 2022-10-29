@@ -161,11 +161,15 @@ pub enum ClientMessage {
 #[derive(Debug)]
 pub struct MessageCodecError {
     message: String,
+    pub is_connection_reset: bool,
 }
 
 impl MessageCodecError {
-    pub fn new(message: String) -> Self {
-        Self { message }
+    pub fn new(message: String, is_connection_reset: bool) -> Self {
+        Self {
+            message,
+            is_connection_reset,
+        }
     }
 }
 
@@ -179,6 +183,7 @@ impl From<std::io::Error> for MessageCodecError {
     fn from(e: std::io::Error) -> Self {
         Self {
             message: format!("{:?}", e),
+            is_connection_reset: e.kind() == ErrorKind::ConnectionReset,
         }
     }
 }
@@ -300,15 +305,15 @@ impl Decoder for MessageCodec {
             Ok(ClientMessageTypeId::Failure) => match try_read(src, reader, try_read_failure) {
                 Ok(None) => Ok(None),
                 Ok(Some(ClientMessage::Failure { message })) => {
-                    Err(MessageCodecError::new(message))
+                    Err(MessageCodecError::new(message, false))
                 }
                 Ok(Some(x)) => panic!("expected failure message, got {:?}", x),
                 Err(e) => Err(e),
             },
-            Err(_) => Err(MessageCodecError::new(format!(
-                "Invalid message ID `{}`",
-                id
-            ))),
+            Err(_) => Err(MessageCodecError::new(
+                format!("Invalid message ID `{}`", id),
+                false,
+            )),
         }
     }
 }
