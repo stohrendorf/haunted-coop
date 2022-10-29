@@ -67,7 +67,7 @@ impl ServerState {
 
     /// Removes a peer from its session and purges the session if it becomes empty.
     pub fn drop_peer(&self, peer: &Arc<Peer>) {
-        info!("{} DROP", peer);
+        info!("DROP {}", peer);
         let session = peer.session.read().upgrade();
         let mut sessions = self.sessions.write();
         if let Some(session) = session {
