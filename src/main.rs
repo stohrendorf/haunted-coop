@@ -5,6 +5,7 @@ use crate::{
     codec::{
         ClientMessage, MessageCodec, MessageCodecError, PeerId, ServerMessage, MAX_STATE_SIZE_BYTES,
     },
+    manager::check_permission,
     peer::Peer,
     server::{ServerError, ServerState, Session},
 };
@@ -33,6 +34,7 @@ use tracing::{error, info, warn};
 
 mod codec;
 mod io_util;
+mod manager;
 mod peer;
 mod server;
 mod test_stream;
@@ -55,6 +57,14 @@ struct Args {
     /// Number of worker threads
     #[clap(short, long, default_value = "2")]
     worker_threads: usize,
+
+    /// Manager URL
+    #[clap(long)]
+    manager_url: Option<String>,
+
+    /// Manager API key
+    #[clap(long)]
+    manager_api_key: Option<String>,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -62,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let args = Args::parse();
 
-    let server_state = Arc::new(ServerState::new());
+    let server_state = Arc::new(ServerState::new(args.manager_url, args.manager_api_key));
     let addrs: Vec<SocketAddr> = args
         .listen
         .iter()
@@ -269,11 +279,11 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         match msg {
             ClientMessage::Login {
                 username,
-                auth_token: _,
+                auth_token,
                 session_id,
             } => {
-                let session = self.peer.server_state.get_or_create_session(&session_id);
-                self.handle_login(username, &session).await?;
+                self.handle_login(&username, &auth_token, &session_id)
+                    .await?;
             }
             ClientMessage::UpdateState { data } => {
                 self.handle_update_state(Arc::new(data)).await?;
@@ -346,17 +356,58 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         }
     }
 
+    async fn can_join_session(
+        &mut self,
+        username: &str,
+        auth_token: &str,
+        session_id: &str,
+    ) -> bool {
+        match (
+            &self.peer.server_state.manager_url,
+            &self.peer.server_state.manager_api_key,
+        ) {
+            (Some(manager_url), Some(manager_api_key)) => match check_permission(
+                &manager_url,
+                &manager_api_key,
+                &auth_token,
+                &session_id,
+                &username,
+            )
+            .await
+            {
+                Err(e) => {
+                    error!(
+                        "failed to check permissions against management server: {}",
+                        e
+                    );
+                    false
+                }
+                Ok(response) => {
+                    if !response.success {
+                        warn!("invalid credentials or session id: {}", response.message);
+                    }
+                    response.success
+                }
+            },
+            _ => true,
+        }
+    }
+
     async fn handle_login(
         &mut self,
-        username: String,
-        session: &Arc<Session>,
+        username: &str,
+        auth_token: &str,
+        session_id: &str,
     ) -> Result<(), MessageCodecError> {
-        *self.peer.username.write() = Some(username);
+        *self.peer.username.write() = Some(username.into());
 
-        // TODO check auth token
-        if true {
+        if self
+            .can_join_session(username, auth_token, session_id)
+            .await
+        {
             info!("LOGIN {}", self.peer);
-            if let Err(e) = join_peer_to_session(self.peer.clone(), session) {
+            let session = self.peer.server_state.get_or_create_session(&session_id);
+            if let Err(e) = join_peer_to_session(self.peer.clone(), &session) {
                 return Err(MessageCodecError::new(e.message, false));
             }
             {

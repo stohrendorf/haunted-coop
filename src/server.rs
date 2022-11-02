@@ -36,6 +36,8 @@ impl Display for Session {
 pub struct ServerState {
     pub sessions: RwLock<HashMap<String, Arc<Session>>>,
     pub peer_id_counter: AtomicU64,
+    pub manager_url: Option<String>,
+    pub manager_api_key: Option<String>,
 }
 
 #[derive(Debug)]
@@ -58,10 +60,12 @@ impl Display for ServerError {
 impl Error for ServerError {}
 
 impl ServerState {
-    pub fn new() -> Self {
+    pub fn new(manager_url: Option<String>, manager_api_key: Option<String>) -> Self {
         Self {
             sessions: RwLock::new(HashMap::new()),
             peer_id_counter: AtomicU64::new(0),
+            manager_url,
+            manager_api_key,
         }
     }
 
@@ -101,7 +105,7 @@ mod tests {
 
     #[test]
     fn test_get_or_create_session() {
-        let server: Arc<ServerState> = Arc::new(ServerState::new());
+        let server: Arc<ServerState> = Arc::new(ServerState::new(None, None));
         let session_id: String = "abc".into();
         let session = server.get_or_create_session(&session_id);
 
@@ -123,7 +127,7 @@ mod tests {
 
     #[test]
     fn test_join_peer_to_session() {
-        let server: Arc<ServerState> = Arc::new(ServerState::new());
+        let server: Arc<ServerState> = Arc::new(ServerState::new(None, None));
         let addr = "127.0.0.1:1234".parse().unwrap();
         let peer_id = 123u64;
         let peer = Arc::new(Peer::new(peer_id, addr, &server));
@@ -146,7 +150,7 @@ mod tests {
 
     #[test]
     fn test_drop_peer() {
-        let server: Arc<ServerState> = Arc::new(ServerState::new());
+        let server: Arc<ServerState> = Arc::new(ServerState::new(None, None));
         let addr = "127.0.0.1:1234".parse().unwrap();
         let peer_id = 123u64;
         let peer = Arc::new(Peer::new(peer_id, addr, &server));
