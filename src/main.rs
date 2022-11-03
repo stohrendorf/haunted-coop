@@ -1,6 +1,7 @@
 #![warn(clippy::pedantic)]
 extern crate core;
 
+use crate::manager::{update_sessions_players, SessionPlayers, SessionsPlayersRequest};
 use crate::{
     codec::{
         ClientMessage, MessageCodec, MessageCodecError, PeerId, ServerMessage, MAX_STATE_SIZE_BYTES,
@@ -133,6 +134,36 @@ async fn run_server(
     let listener = TcpListener::bind(addr).await?;
 
     info!("Listening on {:?}", addr);
+
+    let update_server_state = server_state.clone();
+
+    if let (Some(manager_url), Some(manager_api_key)) = (
+        update_server_state.manager_url.clone(),
+        update_server_state.manager_api_key.clone(),
+    ) {
+        tokio::spawn(async move {
+            loop {
+                let mut req = SessionsPlayersRequest {
+                    api_key: manager_api_key.clone(),
+                    sessions: Vec::new(),
+                };
+                for (session_id, session) in update_server_state.sessions.read().iter() {
+                    let peers = session.peers.read().clone();
+                    req.sessions.push(SessionPlayers {
+                        session_id: session_id.into(),
+                        usernames: peers
+                            .into_iter()
+                            .filter_map(|(_, peer)| peer.username.read().clone())
+                            .collect(),
+                    });
+                }
+                if let Err(e) = update_sessions_players(&manager_url, &req).await {
+                    warn!("failed to update sessions: {}", e);
+                }
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
+    }
 
     loop {
         let (stream, addr) = listener.accept().await?;
@@ -372,11 +403,11 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             &self.peer.server_state.manager_api_key,
         ) {
             (Some(manager_url), Some(manager_api_key)) => match check_permission(
-                &manager_url,
-                &manager_api_key,
-                &auth_token,
-                &session_id,
-                &username,
+                manager_url,
+                manager_api_key,
+                auth_token,
+                session_id,
+                username,
             )
             .await
             {
@@ -414,7 +445,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             .await
         {
             info!("LOGIN {}", self.peer);
-            let session = self.peer.server_state.get_or_create_session(&session_id);
+            let session = self.peer.server_state.get_or_create_session(session_id);
             if let Err(e) = join_peer_to_session(self.peer.clone(), &session) {
                 return Err(MessageCodecError::new(e.message, false));
             }

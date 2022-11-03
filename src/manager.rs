@@ -15,6 +15,18 @@ pub struct SessionAccessRequest {
     pub username: String,
 }
 
+#[derive(Serialize, Debug)]
+pub struct SessionPlayers {
+    pub session_id: String,
+    pub usernames: Vec<String>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct SessionsPlayersRequest {
+    pub api_key: String,
+    pub sessions: Vec<SessionPlayers>,
+}
+
 pub async fn check_permission(
     base_url: &str,
     api_key: &str,
@@ -43,4 +55,18 @@ pub async fn check_permission(
         .await?
         .json::<SuccessResponse>()
         .await
+}
+
+pub async fn update_sessions_players(
+    base_url: &str,
+    request: &SessionsPlayersRequest,
+) -> Result<(), Error> {
+    let url = format!("{}/api/v0/sessions/session-players", base_url);
+    Client::builder()
+        .build()?
+        .post(url)
+        .json(&request)
+        .send()
+        .await?;
+    Ok(())
 }
