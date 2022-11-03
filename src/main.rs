@@ -149,8 +149,12 @@ async fn run_server(
                 };
                 for (session_id, session) in update_server_state.sessions.read().iter() {
                     let peers = session.peers.read().clone();
+                    let session_id: Vec<&str> = session_id.split('/').take(1).collect();
+                    if session_id.is_empty() {
+                        continue;
+                    }
                     req.sessions.push(SessionPlayers {
-                        session_id: session_id.into(),
+                        session_id: session_id[0].into(),
                         usernames: peers
                             .into_iter()
                             .filter_map(|(_, peer)| peer.username.read().clone())
