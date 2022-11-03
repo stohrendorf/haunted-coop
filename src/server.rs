@@ -1,5 +1,7 @@
 use crate::{Peer, PeerId};
 use parking_lot::RwLock;
+use std::sync::atomic::Ordering;
+use std::sync::Weak;
 use std::{
     collections::HashMap,
     error::Error,
@@ -69,6 +71,27 @@ impl ServerState {
         }
     }
 
+    /// Drop all peers that have a matching username.
+    pub fn drop_peers_by_username(&self, username: &String) {
+        let mut drops: Vec<Arc<Peer>> = vec![];
+        {
+            let sessions = self.sessions.read();
+            for (_, session) in sessions.iter() {
+                let peers = session.peers.read();
+                for (_, peer) in peers.iter() {
+                    if *peer.username.read() == Some(username.into()) {
+                        drops.push(peer.clone());
+                    }
+                }
+            }
+        }
+        for peer in &drops {
+            peer.terminate.store(true, Ordering::Release);
+            self.drop_peer(peer);
+            *peer.session.write() = Weak::new();
+        }
+    }
+
     /// Removes a peer from its session and purges the session if it becomes empty.
     pub fn drop_peer(&self, peer: &Arc<Peer>) {
         info!("DROP {}", peer);
@@ -78,6 +101,9 @@ impl ServerState {
             let purge_session = {
                 let mut peers = session.peers.write();
                 peers.remove(&peer.id);
+                for (_, other_peer) in peers.iter() {
+                    other_peer.state_dirty.write().remove(&peer.id);
+                }
                 peers.is_empty()
             };
             if purge_session {
@@ -158,6 +184,24 @@ mod tests {
         let session = server.get_or_create_session(&session_id);
         join_peer_to_session(peer.clone(), &session).unwrap();
         server.drop_peer(&peer);
+
+        assert!(server.sessions.read().is_empty());
+    }
+
+    #[test]
+    fn test_drop_by_username() {
+        let server: Arc<ServerState> = Arc::new(ServerState::new(None, None));
+        let peer = Arc::new(Peer::new(
+            123u64,
+            "127.0.0.1:1234".parse().unwrap(),
+            &server,
+        ));
+        *peer.username.write() = Some("username".into());
+        let session_id: String = "abc".into();
+        let session = server.get_or_create_session(&session_id);
+        join_peer_to_session(peer, &session).unwrap();
+
+        server.drop_peers_by_username(&"username".into());
 
         assert!(server.sessions.read().is_empty());
     }

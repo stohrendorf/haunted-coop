@@ -21,6 +21,7 @@ pub struct Peer {
     pub server_state: Arc<ServerState>,
     pub full_delivery: AtomicBool,
     pub session: RwLock<Weak<Session>>,
+    pub terminate: AtomicBool,
 }
 
 impl Display for Peer {
@@ -50,6 +51,7 @@ impl Peer {
             server_state: server_state.clone(),
             full_delivery: AtomicBool::new(false),
             session: RwLock::new(Weak::new()),
+            terminate: AtomicBool::new(false),
         }
     }
 

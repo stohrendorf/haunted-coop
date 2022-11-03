@@ -257,12 +257,17 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                     },
                 },
                 _ = delivery_ticker.tick() => {
+                    if self.peer.terminate.load(Ordering::Acquire) {
+                        info!("{} terminated", self.peer);
+                        break;
+                    }
+
                     if let Err(e) = self.do_deliveries().await {
                         error!("{} state delivery failed: {:?}", self.peer, e);
                         break;
                     }
                 },
-            };
+            }
 
             if let Err(e) = self.messages.flush().await {
                 error!("{} flush failed: {:?}", self.peer, e);
@@ -399,6 +404,9 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         auth_token: &str,
         session_id: &str,
     ) -> Result<(), MessageCodecError> {
+        self.peer
+            .server_state
+            .drop_peers_by_username(&username.to_string());
         *self.peer.username.write() = Some(username.into());
 
         if self
