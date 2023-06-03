@@ -182,7 +182,7 @@ impl Display for MessageCodecError {
 impl From<std::io::Error> for MessageCodecError {
     fn from(e: std::io::Error) -> Self {
         Self {
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             is_connection_reset: e.kind() == ErrorKind::ConnectionReset,
         }
     }
@@ -191,6 +191,7 @@ impl From<std::io::Error> for MessageCodecError {
 impl Error for MessageCodecError {}
 
 #[derive(Clone, Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub struct MessageCodec {}
 
 /// Tries to read a [`ClientMessageTypeId::Login`] from the client. Returns [`None`] if the data is
@@ -206,14 +207,8 @@ fn try_read_login(src: &mut Reader<BytesMut>) -> Result<Option<ClientMessage>, M
             return Err(MessageCodecError::from(e));
         }
     };
-    let auth_token = match src.read_pstring() {
-        Ok(x) => x,
-        Err(_) => return Ok(None),
-    };
-    let session_id = match src.read_pstring() {
-        Ok(x) => x,
-        Err(_) => return Ok(None),
-    };
+    let Ok(auth_token) = src.read_pstring() else { return Ok(None) };
+    let Ok(session_id) = src.read_pstring() else { return Ok(None) };
     Ok(Some(ClientMessage::Login {
         username,
         auth_token,
@@ -307,11 +302,11 @@ impl Decoder for MessageCodec {
                 Ok(Some(ClientMessage::Failure { message })) => {
                     Err(MessageCodecError::new(message, false))
                 }
-                Ok(Some(x)) => panic!("expected failure message, got {:?}", x),
+                Ok(Some(x)) => panic!("expected failure message, got {x:?}"),
                 Err(e) => Err(e),
             },
             Err(_) => Err(MessageCodecError::new(
-                format!("Invalid message ID `{}`", id),
+                format!("Invalid message ID `{id}`"),
                 false,
             )),
         }
@@ -324,13 +319,15 @@ impl Encoder<ServerMessage> for MessageCodec {
     fn encode(&mut self, data: ServerMessage, buf: &mut BytesMut) -> Result<(), MessageCodecError> {
         match data {
             ServerMessage::FullSync { states } => {
-                if states.len() > u8::MAX as usize {
-                    panic!();
-                }
+                assert!(
+                    u8::try_from(states.len()).is_ok(),
+                    "Too many states for a full sync"
+                );
 
                 {
                     let mut w = buf.writer();
                     w.write_u8(ServerMessageTypeId::FullSync.into())?;
+                    #[allow(clippy::cast_possible_truncation)]
                     w.write_u8(states.len() as u8)?;
                 }
 

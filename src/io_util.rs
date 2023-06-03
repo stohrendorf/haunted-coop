@@ -19,7 +19,7 @@ pub trait ReadPascalExt: Read {
         if size > max_size {
             return Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("sent data size {} exceeds maximum {}", size, max_size),
+                format!("sent data size {size} exceeds maximum {max_size}"),
             ));
         }
 
@@ -36,6 +36,7 @@ pub trait WritePascalExt: Write {
         if str_data.len() > u8::MAX as usize {
             return Err(Error::new(ErrorKind::InvalidData, "string too long"));
         }
+        #[allow(clippy::cast_possible_truncation)]
         self.write_u8(str_data.len() as u8)?;
         self.write_all(str_data)?;
         Ok(())
@@ -46,6 +47,7 @@ pub trait WritePascalExt: Write {
             return Err(Error::new(ErrorKind::InvalidData, "data too long"));
         }
 
+        #[allow(clippy::cast_possible_truncation)]
         self.write_u16::<LittleEndian>(data.len() as u16)?;
         self.write_all(data)?;
         Ok(())

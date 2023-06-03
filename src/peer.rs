@@ -63,9 +63,7 @@ impl Peer {
         &self,
         all_session_peers: bool,
     ) -> Result<HashMap<PeerId, Arc<Peer>>, ServerError> {
-        let session = if let Some(session) = self.session.read().upgrade() {
-            session
-        } else {
+        let Some(session) = self.session.read().upgrade() else {
             return Err(ServerError::new(format!(
                 "{} has no associated session",
                 *self

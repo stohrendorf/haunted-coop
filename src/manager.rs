@@ -34,7 +34,7 @@ pub async fn check_permission(
     session_id: &str,
     username: &str,
 ) -> Result<SuccessResponse, Error> {
-    let url = format!("{}/api/v0/sessions/check-access", base_url);
+    let url = format!("{base_url}/api/v0/sessions/check-access");
     let session_id: Vec<&str> = session_id.split('/').take(1).collect();
     if session_id.is_empty() {
         return Ok(SuccessResponse {
@@ -61,7 +61,7 @@ pub async fn update_sessions_players(
     base_url: &str,
     request: &SessionsPlayersRequest,
 ) -> Result<(), Error> {
-    let url = format!("{}/api/v0/sessions/session-players", base_url);
+    let url = format!("{base_url}/api/v0/sessions/session-players");
     Client::builder()
         .build()?
         .post(url)

@@ -35,6 +35,7 @@ impl Display for Session {
     }
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct ServerState {
     pub sessions: RwLock<HashMap<String, Arc<Session>>>,
     pub peer_id_counter: AtomicU64,
@@ -43,6 +44,7 @@ pub struct ServerState {
 }
 
 #[derive(Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub struct ServerError {
     pub message: String,
 }

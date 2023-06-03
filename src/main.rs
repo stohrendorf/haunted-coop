@@ -79,7 +79,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .iter()
         .map(|arg| {
             arg.parse()
-                .unwrap_or_else(|_| panic!("invalid socket address {}", arg))
+                .unwrap_or_else(|_| panic!("invalid socket address {arg}"))
         })
         .collect();
 
