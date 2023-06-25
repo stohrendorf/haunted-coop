@@ -302,7 +302,7 @@ impl Decoder for MessageCodec {
                 Ok(Some(ClientMessage::Failure { message })) => {
                     Err(MessageCodecError::new(message, false))
                 }
-                Ok(Some(x)) => panic!("expected failure message, got {x:?}"),
+                Ok(Some(message)) => panic!("expected failure message, got {message:?}"),
                 Err(e) => Err(e),
             },
             Err(_) => Err(MessageCodecError::new(
