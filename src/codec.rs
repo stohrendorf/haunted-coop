@@ -207,8 +207,12 @@ fn try_read_login(src: &mut Reader<BytesMut>) -> Result<Option<ClientMessage>, M
             return Err(MessageCodecError::from(e));
         }
     };
-    let Ok(auth_token) = src.read_pstring() else { return Ok(None) };
-    let Ok(session_id) = src.read_pstring() else { return Ok(None) };
+    let Ok(auth_token) = src.read_pstring() else {
+        return Ok(None);
+    };
+    let Ok(session_id) = src.read_pstring() else {
+        return Ok(None);
+    };
     Ok(Some(ClientMessage::Login {
         username,
         auth_token,

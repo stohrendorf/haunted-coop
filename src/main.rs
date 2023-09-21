@@ -147,7 +147,7 @@ async fn run_server(
                     api_key: manager_api_key.clone(),
                     sessions: Vec::new(),
                 };
-                for (session_id, session) in update_server_state.sessions.read().iter() {
+                for (session_id, session) in &*update_server_state.sessions.read() {
                     let peers = session.peers.read().clone();
                     let session_id: Vec<&str> = session_id.split('/').take(1).collect();
                     if session_id.is_empty() {

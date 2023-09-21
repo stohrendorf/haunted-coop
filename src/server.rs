@@ -78,9 +78,9 @@ impl ServerState {
         let mut drops: Vec<Arc<Peer>> = vec![];
         {
             let sessions = self.sessions.read();
-            for (_, session) in sessions.iter() {
+            for session in sessions.values() {
                 let peers = session.peers.read();
-                for (_, peer) in peers.iter() {
+                for peer in peers.values() {
                     if *peer.username.read() == Some(username.into()) {
                         drops.push(peer.clone());
                     }
@@ -103,7 +103,7 @@ impl ServerState {
             let purge_session = {
                 let mut peers = session.peers.write();
                 peers.remove(&peer.id);
-                for (_, other_peer) in peers.iter() {
+                for other_peer in peers.values() {
                     other_peer.state_dirty.write().remove(&peer.id);
                 }
                 peers.is_empty()

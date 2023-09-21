@@ -84,7 +84,7 @@ mod tests {
     fn test_write_pstring_too_long() {
         let buf = BytesMut::new();
         let mut w = buf.writer();
-        assert!(matches!(w.write_pstring(&"x".repeat(256)), Err(_)));
+        assert!(w.write_pstring(&"x".repeat(256)).is_err());
     }
 
     #[test]
@@ -112,7 +112,7 @@ mod tests {
         buf = buf.split_off(1);
 
         let mut r = buf.reader();
-        assert!(matches!(r.read_pstring(), Err(_)));
+        assert!(r.read_pstring().is_err());
     }
 
     #[test]
@@ -137,10 +137,9 @@ mod tests {
     fn test_write_pbuffer_too_long() {
         let buf = BytesMut::new();
         let mut w = buf.writer();
-        assert!(matches!(
-            w.write_pbuffer(&[1u8].repeat(u16::MAX as usize + 1)),
-            Err(_)
-        ));
+        assert!(w
+            .write_pbuffer(&[1u8].repeat(u16::MAX as usize + 1))
+            .is_err());
     }
 
     #[test]
@@ -168,6 +167,6 @@ mod tests {
         buf = buf.split_off(1);
 
         let mut r = buf.reader();
-        assert!(matches!(r.read_pbuffer(500), Err(_)));
+        assert!(r.read_pbuffer(500).is_err());
     }
 }
