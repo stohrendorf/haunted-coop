@@ -1,12 +1,12 @@
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io::{ErrorKind, Read, Write};
+
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use tokio::io::Error;
 
 pub trait ReadPascalExt: Read {
     fn read_pstring(&mut self) -> Result<String, Error> {
-        let mut data = Vec::new();
+        let mut data = vec![0; self.read_u8()? as usize];
 
-        data.resize(self.read_u8()? as usize, 0);
         self.read_exact(&mut data)?;
         match String::from_utf8(data) {
             Ok(r) => Ok(r),
@@ -23,8 +23,7 @@ pub trait ReadPascalExt: Read {
             ));
         }
 
-        let mut data = Vec::new();
-        data.resize(size as usize, 0);
+        let mut data = vec![0; size as usize];
         self.read_exact(&mut data)?;
         Ok(data)
     }
@@ -55,12 +54,14 @@ pub trait WritePascalExt: Write {
 }
 
 impl<R: Read + ?Sized> ReadPascalExt for R {}
+
 impl<W: Write + ?Sized> WritePascalExt for W {}
 
 #[cfg(test)]
 mod tests {
-    use crate::io_util::{ReadPascalExt, WritePascalExt};
     use bytes::{Buf, BufMut, BytesMut};
+
+    use crate::io_util::{ReadPascalExt, WritePascalExt};
 
     #[test]
     fn test_write_pstring() {

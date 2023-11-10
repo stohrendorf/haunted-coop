@@ -1,17 +1,6 @@
 #![warn(clippy::pedantic)]
 extern crate core;
 
-use crate::manager::{update_sessions_players, SessionPlayers, SessionsPlayersRequest};
-use crate::{
-    codec::{
-        ClientMessage, MessageCodec, MessageCodecError, PeerId, ServerMessage, MAX_STATE_SIZE_BYTES,
-    },
-    manager::check_permission,
-    peer::Peer,
-    server::{ServerError, ServerState, Session},
-};
-use clap::Parser;
-use futures::{future, SinkExt, StreamExt};
 use std::{
     collections::hash_map::DefaultHasher,
     error::Error,
@@ -22,6 +11,9 @@ use std::{
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
+
+use clap::Parser;
+use futures::{future, SinkExt, StreamExt};
 use tokio::{
     io::{AsyncRead, AsyncWrite, BufReader, BufWriter},
     net::TcpListener,
@@ -32,6 +24,16 @@ use tokio::{
 use tokio_io_timeout::{TimeoutReader, TimeoutWriter};
 use tokio_util::codec::{Decoder, Framed};
 use tracing::{error, info, warn};
+
+use crate::manager::{update_sessions_players, SessionPlayers, SessionsPlayersRequest};
+use crate::{
+    codec::{
+        ClientMessage, MessageCodec, MessageCodecError, PeerId, ServerMessage, MAX_STATE_SIZE_BYTES,
+    },
+    manager::check_permission,
+    peer::Peer,
+    server::{ServerError, ServerState, Session},
+};
 
 mod codec;
 mod io_util;
@@ -45,9 +47,9 @@ mod test_stream;
 struct Args {
     /// Listen address
     #[clap(
-        short,
-        long,
-        default_values = vec!["127.0.0.1:1996", "[::1]:1996"]
+    short,
+    long,
+    default_values = vec!["127.0.0.1:1996", "[::1]:1996"]
     )]
     listen: Vec<String>,
 
@@ -274,7 +276,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             select! {
                 msg = self.messages.next() => match msg {
                     Some(Ok(msg)) => match self.handle_message(msg).await {
-                        Ok(_) => {}
+                        Ok(()) => {}
                         Err(e) => {
                             error!("{} message handling failed: {:?}", self.peer, e);
                             break;
@@ -335,7 +337,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
                 return Err(MessageCodecError::new(
                     format!("{} sent unexpected failure: `{}`", self.peer, message),
                     false,
-                ))
+                ));
             }
         }
 
@@ -388,7 +390,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
             })
             .await
         {
-            Ok(_) => Ok(()),
+            Ok(()) => Ok(()),
             Err(e) => {
                 error!("failed to send failure message: {:?}", e);
                 Err(e)
