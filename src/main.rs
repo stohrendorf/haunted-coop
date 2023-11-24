@@ -354,8 +354,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
 
         self.peer.clear_dirty();
 
-        let mut states: Vec<(PeerId, Arc<Vec<u8>>)> = Vec::new();
-        states.reserve(peers.len());
+        let mut states: Vec<(PeerId, Arc<Vec<u8>>)> = Vec::with_capacity(peers.len());
 
         for (peer_id, peer) in peers {
             assert_ne!(peer_id, self.peer.id);
