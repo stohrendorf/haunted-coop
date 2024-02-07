@@ -1,14 +1,16 @@
-use crate::io_util::{ReadPascalExt, WritePascalExt};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use bytes::{buf::Reader, Buf, BufMut, BytesMut};
-use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::{
     error::Error,
     fmt::{Debug, Display, Formatter},
     io::ErrorKind,
     sync::Arc,
 };
+
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use bytes::{buf::Reader, Buf, BufMut, BytesMut};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use tokio_util::codec::{Decoder, Encoder};
+
+use crate::io_util::{ReadPascalExt, WritePascalExt};
 
 /// The peer identifier.
 pub type PeerId = u64;
@@ -99,7 +101,7 @@ pub enum ServerMessageTypeId {
     /// each peer is highly probable, but not guaranteed.
     ///
     /// # Body
-    /// - `peer_id: PeerId` - endianess is only important if you want to exchange the ID with other peers
+    /// - `peer_id: PeerId` - endianness is only important if you want to exchange the ID with other peers
     /// - `data: PBuffer`
     UpdateState = 2,
 
@@ -197,7 +199,7 @@ pub struct MessageCodec {}
 /// Tries to read a [`ClientMessageTypeId::Login`] from the client. Returns [`None`] if the data is
 /// incomplete.
 fn try_read_login(src: &mut Reader<BytesMut>) -> Result<Option<ClientMessage>, MessageCodecError> {
-    let username = match src.read_pstring() {
+    let username = match src.read_pascal_string() {
         Ok(x) => x,
         Err(e) => {
             if e.kind() == ErrorKind::InvalidData || e.kind() == ErrorKind::UnexpectedEof {
@@ -207,10 +209,10 @@ fn try_read_login(src: &mut Reader<BytesMut>) -> Result<Option<ClientMessage>, M
             return Err(MessageCodecError::from(e));
         }
     };
-    let Ok(auth_token) = src.read_pstring() else {
+    let Ok(auth_token) = src.read_pascal_string() else {
         return Ok(None);
     };
-    let Ok(session_id) = src.read_pstring() else {
+    let Ok(session_id) = src.read_pascal_string() else {
         return Ok(None);
     };
     Ok(Some(ClientMessage::Login {
@@ -225,7 +227,7 @@ fn try_read_login(src: &mut Reader<BytesMut>) -> Result<Option<ClientMessage>, M
 fn try_read_update_state(
     src: &mut Reader<BytesMut>,
 ) -> Result<Option<ClientMessage>, MessageCodecError> {
-    let data = match src.read_pbuffer(MAX_STATE_SIZE_BYTES) {
+    let data = match src.read_pascal_buffer(MAX_STATE_SIZE_BYTES) {
         Ok(x) => x,
         Err(e) => {
             if e.kind() == ErrorKind::InvalidData || e.kind() == ErrorKind::UnexpectedEof {
@@ -242,7 +244,7 @@ fn try_read_update_state(
 fn try_read_failure(
     src: &mut Reader<BytesMut>,
 ) -> Result<Option<ClientMessage>, MessageCodecError> {
-    let message = match src.read_pstring() {
+    let message = match src.read_pascal_string() {
         Ok(x) => x,
         Err(e) => {
             if e.kind() == ErrorKind::InvalidData || e.kind() == ErrorKind::UnexpectedEof {
@@ -339,7 +341,7 @@ impl Encoder<ServerMessage> for MessageCodec {
                     buf.reserve(1 + state.len());
                     let mut w = buf.writer();
                     w.write_u64::<LittleEndian>(peer_id)?;
-                    w.write_pbuffer(&state)?;
+                    w.write_pascal_buffer(&state)?;
                 }
             }
             ServerMessage::UpdateState { states } => {
@@ -348,7 +350,7 @@ impl Encoder<ServerMessage> for MessageCodec {
                     let mut w = buf.writer();
                     w.write_u8(ServerMessageTypeId::UpdateState.into())?;
                     w.write_u64::<LittleEndian>(peer_id)?;
-                    w.write_pbuffer(&state)?;
+                    w.write_pascal_buffer(&state)?;
                 }
             }
             ServerMessage::ServerInfo {} => {
@@ -362,7 +364,7 @@ impl Encoder<ServerMessage> for MessageCodec {
                 buf.reserve(1);
                 let mut w = buf.writer();
                 w.write_u8(ServerMessageTypeId::Failure.into())?;
-                w.write_pstring(&message)?;
+                w.write_pascal_string(&message)?;
             }
         }
         Ok(())
@@ -371,16 +373,17 @@ impl Encoder<ServerMessage> for MessageCodec {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_stream::StreamBuilder;
-    use crate::{
-        codec::ClientMessageTypeId, io_util::WritePascalExt, test_stream::TestStream,
-        ClientMessage, MessageCodec,
-    };
     use byteorder::WriteBytesExt;
     use futures::StreamExt;
     use ntest::{test_case, timeout};
     use tokio::runtime::{Builder, Runtime};
     use tokio_util::codec::Decoder;
+
+    use crate::test_stream::StreamBuilder;
+    use crate::{
+        codec::ClientMessageTypeId, io_util::WritePascalExt, test_stream::TestStream,
+        ClientMessage, MessageCodec,
+    };
 
     #[test]
     #[timeout(20)]
@@ -388,11 +391,14 @@ mod tests {
         let mut data = Vec::new();
         data.write_u8(ClientMessageTypeId::UpdateState.into())
             .unwrap();
-        data.write_pbuffer(&[1, 2, 3]).unwrap();
+        data.write_pascal_buffer(&[1, 2, 3]).unwrap();
         let mut framed = MessageCodec::new().framed(TestStream::new(data));
-        match create_runtime().block_on(framed.next()).unwrap().unwrap() {
-            ClientMessage::UpdateState { data } => assert_eq!(data, [1, 2, 3]),
-            _ => panic!(),
+        if let ClientMessage::UpdateState { data } =
+            create_runtime().block_on(framed.next()).unwrap().unwrap()
+        {
+            assert_eq!(data, [1, 2, 3]);
+        } else {
+            panic!()
         }
     }
 
@@ -404,7 +410,7 @@ mod tests {
         let mut data = Vec::new();
         data.write_u8(ClientMessageTypeId::UpdateState.into())
             .unwrap();
-        data.write_pbuffer(&[1, 2, 3]).unwrap();
+        data.write_pascal_buffer(&[1, 2, 3]).unwrap();
         data.resize(data.len() - 1, 0);
         expect_codec_failure(
             data,

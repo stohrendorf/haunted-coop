@@ -4,7 +4,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use tokio::io::Error;
 
 pub trait ReadPascalExt: Read {
-    fn read_pstring(&mut self) -> Result<String, Error> {
+    fn read_pascal_string(&mut self) -> Result<String, Error> {
         let mut data = vec![0; self.read_u8()? as usize];
 
         self.read_exact(&mut data)?;
@@ -14,7 +14,7 @@ pub trait ReadPascalExt: Read {
         }
     }
 
-    fn read_pbuffer(&mut self, max_size: u16) -> Result<Vec<u8>, Error> {
+    fn read_pascal_buffer(&mut self, max_size: u16) -> Result<Vec<u8>, Error> {
         let size = self.read_u16::<LittleEndian>()?;
         if size > max_size {
             return Err(Error::new(
@@ -30,7 +30,7 @@ pub trait ReadPascalExt: Read {
 }
 
 pub trait WritePascalExt: Write {
-    fn write_pstring(&mut self, string: &str) -> Result<(), Error> {
+    fn write_pascal_string(&mut self, string: &str) -> Result<(), Error> {
         let str_data = string.as_bytes();
         if str_data.len() > u8::MAX as usize {
             return Err(Error::new(ErrorKind::InvalidData, "string too long"));
@@ -41,7 +41,7 @@ pub trait WritePascalExt: Write {
         Ok(())
     }
 
-    fn write_pbuffer(&mut self, data: &[u8]) -> Result<(), Error> {
+    fn write_pascal_buffer(&mut self, data: &[u8]) -> Result<(), Error> {
         if data.len() > u16::MAX as usize {
             return Err(Error::new(ErrorKind::InvalidData, "data too long"));
         }
@@ -64,11 +64,11 @@ mod tests {
     use crate::io_util::{ReadPascalExt, WritePascalExt};
 
     #[test]
-    fn test_write_pstring() {
+    fn test_write_pascal_string() {
         let mut buf = BytesMut::new();
         {
             let mut w = buf.writer();
-            w.write_pstring("hello").unwrap();
+            w.write_pascal_string("hello").unwrap();
             buf = w.into_inner();
         }
 
@@ -82,46 +82,46 @@ mod tests {
     }
 
     #[test]
-    fn test_write_pstring_too_long() {
+    fn test_write_pascal_string_too_long() {
         let buf = BytesMut::new();
         let mut w = buf.writer();
-        assert!(w.write_pstring(&"x".repeat(256)).is_err());
+        assert!(w.write_pascal_string(&"x".repeat(256)).is_err());
     }
 
     #[test]
-    fn test_read_pstring() {
+    fn test_read_pascal_string() {
         let mut buf = BytesMut::new();
         {
             let mut w = buf.writer();
-            w.write_pstring("hello").unwrap();
+            w.write_pascal_string("hello").unwrap();
             buf = w.into_inner();
         }
 
         let mut r = buf.reader();
-        assert_eq!(r.read_pstring().unwrap(), "hello");
+        assert_eq!(r.read_pascal_string().unwrap(), "hello");
     }
 
     #[test]
-    fn test_read_pstring_too_short() {
+    fn test_read_pascal_string_too_short() {
         let mut buf = BytesMut::new();
         {
             let mut w = buf.writer();
-            w.write_pstring("hello").unwrap();
+            w.write_pascal_string("hello").unwrap();
             buf = w.into_inner();
         }
 
         buf = buf.split_off(1);
 
         let mut r = buf.reader();
-        assert!(r.read_pstring().is_err());
+        assert!(r.read_pascal_string().is_err());
     }
 
     #[test]
-    fn test_write_pbuffer() {
+    fn test_write_pascal_buffer() {
         let mut buf = BytesMut::new();
         {
             let mut w = buf.writer();
-            w.write_pbuffer(&[1, 2, 3, 4]).unwrap();
+            w.write_pascal_buffer(&[1, 2, 3, 4]).unwrap();
             buf = w.into_inner();
         }
 
@@ -135,39 +135,39 @@ mod tests {
     }
 
     #[test]
-    fn test_write_pbuffer_too_long() {
+    fn test_write_pascal_buffer_too_long() {
         let buf = BytesMut::new();
         let mut w = buf.writer();
         assert!(w
-            .write_pbuffer(&[1u8].repeat(u16::MAX as usize + 1))
+            .write_pascal_buffer(&[1u8].repeat(u16::MAX as usize + 1))
             .is_err());
     }
 
     #[test]
-    fn test_read_pbuffer() {
+    fn test_read_pascal_buffer() {
         let mut buf = BytesMut::new();
         {
             let mut w = buf.writer();
-            w.write_pbuffer(&[1, 2, 3, 4]).unwrap();
+            w.write_pascal_buffer(&[1, 2, 3, 4]).unwrap();
             buf = w.into_inner();
         }
 
         let mut r = buf.reader();
-        assert_eq!(r.read_pbuffer(5000).unwrap(), [1, 2, 3, 4]);
+        assert_eq!(r.read_pascal_buffer(5000).unwrap(), [1, 2, 3, 4]);
     }
 
     #[test]
-    fn test_read_pbuffer_too_short() {
+    fn test_read_pascal_buffer_too_short() {
         let mut buf = BytesMut::new();
         {
             let mut w = buf.writer();
-            w.write_pbuffer(&[1, 2, 3, 4]).unwrap();
+            w.write_pascal_buffer(&[1, 2, 3, 4]).unwrap();
             buf = w.into_inner();
         }
 
         buf = buf.split_off(1);
 
         let mut r = buf.reader();
-        assert!(r.read_pbuffer(500).is_err());
+        assert!(r.read_pascal_buffer(500).is_err());
     }
 }
