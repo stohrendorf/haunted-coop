@@ -1,4 +1,4 @@
-ARG RUST_VERSION=1.74
+ARG RUST_VERSION=1.75
 
 FROM rust:$RUST_VERSION-bookworm as builder
 WORKDIR /usr/src/haunted-coop
