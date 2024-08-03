@@ -31,7 +31,7 @@ version = "*"
 features = ["attributes"]
 
 [dependencies.tokio]
-version = "*"
+version = ">=1.0.0"
 features = ["default", "rt-multi-thread", "macros", "num_cpus"]
 
 [dependencies.clap]
