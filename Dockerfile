@@ -1,9 +1,12 @@
-ARG RUST_VERSION=1.80.1
+ARG RUST_VERSION=1.81.0
 
 FROM rust:$RUST_VERSION-bookworm as builder
 WORKDIR /usr/src/haunted-coop
 COPY . .
-RUN apt update && apt install -yq pkg-config libssl-dev && cargo test && cargo install --path . --locked
+RUN apt update \
+ && apt install -yq pkg-config libssl-dev \
+ && cargo test \
+ && cargo install --path . --locked
 
 FROM rust:$RUST_VERSION-slim-bookworm
 COPY --from=builder /usr/local/cargo/bin/haunted-coop /usr/local/bin/haunted-coop
