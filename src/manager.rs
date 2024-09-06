@@ -27,6 +27,15 @@ pub struct SessionsPlayersRequest {
     pub sessions: Vec<SessionPlayers>,
 }
 
+/// Sends a request to Haunted Manager to verify that a user is allowed to log in.
+///
+/// # Arguments
+///
+/// * `base_url`: The base URL of Haunted Manager.
+/// * `api_key`: The API key for the user stored in Haunted Manager.
+/// * `auth_token`: The Auth Token stored for the user in Haunted Manager.
+/// * `session_id`: The session ID checked against for access.
+/// * `username`: The user name of the user.
 pub async fn check_permission(
     base_url: &str,
     api_key: &str,
@@ -57,6 +66,13 @@ pub async fn check_permission(
         .await
 }
 
+/// Sends the currently active users to the backend.
+///
+/// # Arguments
+///
+/// * `base_url`: The base URL of the Haunted Manager backed to send requests to.
+/// * `request`: The request to send to the backend, containing the currently logged in players
+///              in each session.
 pub async fn update_sessions_players(
     base_url: &str,
     request: &SessionsPlayersRequest,

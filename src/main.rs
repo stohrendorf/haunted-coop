@@ -186,6 +186,8 @@ async fn run_server(
     }
 }
 
+/// Creates a new readable and writable stream wrapper around `stream` that times out after
+/// `timeout`.
 fn create_timeout_stream<S: AsyncRead + AsyncWrite>(
     timeout: Duration,
     stream: S,
@@ -198,8 +200,11 @@ fn create_timeout_stream<S: AsyncRead + AsyncWrite>(
     BufWriter::new(timeout_stream)
 }
 
+/// Connection to a peer.
 struct Connection<S: AsyncRead + AsyncWrite> {
+    /// The peer this connection connects to.
     peer: Arc<Peer>,
+    /// The messages between the server and the client.
     messages: Pin<Box<Framed<S, MessageCodec>>>,
 }
 
@@ -257,6 +262,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         }
     }
 
+    /// Send the peer's partners' states to the peer.
     async fn do_deliveries(&mut self) -> Result<(), MessageCodecError> {
         let session = self.peer.session.read().upgrade();
         if session.is_none() {
@@ -317,6 +323,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         info!("DISCONNECT {}", self.peer);
     }
 
+    /// Dispatches the `msg` to the appropriate handlers.
     async fn handle_message(&mut self, msg: ClientMessage) -> Result<(), MessageCodecError> {
         match msg {
             ClientMessage::Login {
@@ -344,6 +351,8 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         Ok(())
     }
 
+    /// Sends peer states to the requesting peer. Depending on `full_delivery`, this will either
+    /// only send the changed peers' state since the last request, or send all peers' states.
     async fn send_states(&mut self, full_delivery: bool) -> Result<(), MessageCodecError> {
         let peers = match self.peer.get_out_of_date_peers(full_delivery) {
             Ok(peers) => peers,
@@ -377,6 +386,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         Ok(())
     }
 
+    /// Handles messages sent by peers to be sent to their joined peers.
     async fn handle_update_state(&mut self, state: Arc<Vec<u8>>) -> Result<(), MessageCodecError> {
         if set_peer_state(&self.peer, state) {
             return Ok(());
@@ -397,6 +407,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         }
     }
 
+    /// Checks permissions whether a peer can join a session.
     async fn can_join_session(
         &mut self,
         username: &str,
@@ -434,6 +445,7 @@ impl<S: AsyncRead + AsyncWrite> Connection<S> {
         }
     }
 
+    /// Check whether a peer's login credentials are valid.
     async fn handle_login(
         &mut self,
         username: &str,

@@ -59,6 +59,8 @@ impl Peer {
     ///
     /// If `all_session_peers` is `true`, this will return all peers in the same session, excluding
     /// this peer.
+    ///
+    /// Fails if the peer has no associated session.
     pub fn get_out_of_date_peers(
         &self,
         all_session_peers: bool,
@@ -86,6 +88,7 @@ impl Peer {
         }
     }
 
+    /// Resets the "dirty" states of all peers so no peer is marked as "dirty" after calling this.
     pub fn clear_dirty(&self) {
         self.state_dirty.write().clear();
     }

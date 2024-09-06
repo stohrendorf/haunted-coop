@@ -4,6 +4,8 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use tokio::io::Error;
 
 pub trait ReadPascalExt: Read {
+    /// Reads a Pascal string. The string is prefixed with its length as a `u8`, not including the
+    /// terminating `NUL`. Supports UTF8. Fails if the string is not UTF8.
     fn read_pascal_string(&mut self) -> Result<String, Error> {
         let mut data = vec![0; self.read_u8()? as usize];
 
@@ -14,6 +16,8 @@ pub trait ReadPascalExt: Read {
         }
     }
 
+    /// Reads Pascal-like data. The data is prefixed with its length as a `u16`. Fails if the length
+    /// exceeds `max_size` or if the data could not be read.
     fn read_pascal_buffer(&mut self, max_size: u16) -> Result<Vec<u8>, Error> {
         let size = self.read_u16::<LittleEndian>()?;
         if size > max_size {
@@ -30,6 +34,8 @@ pub trait ReadPascalExt: Read {
 }
 
 pub trait WritePascalExt: Write {
+    /// Writes a Pascal string. The string is prefixed with its binary length as a `u8`, not
+    /// including the terminating `NUL`. Supports UTF8. Fails if the string is too long.
     fn write_pascal_string(&mut self, string: &str) -> Result<(), Error> {
         let str_data = string.as_bytes();
         if str_data.len() > u8::MAX as usize {
@@ -41,6 +47,8 @@ pub trait WritePascalExt: Write {
         Ok(())
     }
 
+    /// Writes Pascal-like data. The data is prefixed with its length as a `u16`. Fails if the
+    /// length of `data` exceeds [`u16::MAX`].
     fn write_pascal_buffer(&mut self, data: &[u8]) -> Result<(), Error> {
         if data.len() > u16::MAX as usize {
             return Err(Error::new(ErrorKind::InvalidData, "data too long"));
