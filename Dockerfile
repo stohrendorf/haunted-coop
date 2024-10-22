@@ -1,6 +1,6 @@
-ARG RUST_VERSION=1.81.0
+ARG RUST_VERSION=1.82.0
 
-FROM rust:$RUST_VERSION-bookworm as builder
+FROM rust:${RUST_VERSION}-bookworm as builder
 WORKDIR /usr/src/haunted-coop
 COPY . .
 RUN apt update \
@@ -8,7 +8,7 @@ RUN apt update \
  && cargo test \
  && cargo install --path . --locked
 
-FROM rust:$RUST_VERSION-slim-bookworm
+FROM rust:${RUST_VERSION}-slim-bookworm
 COPY --from=builder /usr/local/cargo/bin/haunted-coop /usr/local/bin/haunted-coop
 EXPOSE 1996
 USER 1000
