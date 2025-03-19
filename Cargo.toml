@@ -12,7 +12,6 @@ futures = "*"
 tracing-subscriber = "*"
 tokio-io = "*"
 tokio-io-timeout = "*"
-tokio-stream-ext = "*"
 bytes = "*"
 byteorder = "*"
 num_cpus = "*"
@@ -25,10 +24,6 @@ features = ["async-await"]
 [dependencies.tokio-util]
 version = "*"
 features = ["full"]
-
-[dependencies.async-std]
-version = "*"
-features = ["attributes"]
 
 [dependencies.tokio]
 version = ">=1.0.0"
