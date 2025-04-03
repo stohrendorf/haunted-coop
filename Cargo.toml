@@ -1,16 +1,13 @@
 [package]
 name = "haunted-coop"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 description = "The Haunted Coop Server"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 num_enum = "*"
 futures = "*"
 tracing-subscriber = "*"
-tokio-io = "*"
 tokio-io-timeout = "*"
 bytes = "*"
 byteorder = "*"

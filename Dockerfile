@@ -1,6 +1,6 @@
-ARG RUST_VERSION=1.85.1
+ARG RUST_VERSION=1.86.0
 
-FROM rust:${RUST_VERSION}-bookworm as builder
+FROM rust:${RUST_VERSION}-bookworm AS builder
 WORKDIR /usr/src/haunted-coop
 COPY . .
 RUN apt update \
