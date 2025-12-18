@@ -20,7 +20,6 @@ features = ["async-await"]
 
 [dependencies.tokio-util]
 version = "*"
-features = ["full"]
 
 [dependencies.tokio]
 version = ">=1.0.0"
