@@ -72,7 +72,7 @@ pub async fn check_permission(
 ///
 /// * `base_url`: The base URL of the Haunted Manager backed to send requests to.
 /// * `request`: The request to send to the backend, containing the currently logged in players
-///              in each session.
+///   in each session.
 pub async fn update_sessions_players(
     base_url: &str,
     request: &SessionsPlayersRequest,

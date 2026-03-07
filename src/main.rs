@@ -214,12 +214,9 @@ fn set_peer_state(peer: &Arc<Peer>, state: Arc<Vec<u8>>) -> bool {
         return false;
     }
 
-    let session = match peer.session.read().clone().upgrade() {
-        None => {
-            warn!("peer {} has no associated session yet", *peer);
-            return true;
-        }
-        Some(session) => session,
+    let Some(session) = peer.session.read().clone().upgrade() else {
+        warn!("peer {} has no associated session yet", *peer);
+        return true;
     };
 
     *peer.state.write() = Some(state);
